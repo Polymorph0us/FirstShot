@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saveetha Learner Portal — Assessment & Event Booking</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --sec-navy: #1e3a8a;
+      --sec-dark: #0f172a;
+      --sec-blue: #2563eb;
+      --sec-light-blue: #eff6ff;
+      --sec-border: #e2e8f0;
+      --sec-border-light: #f1f5f9;
+      --sec-bg: #f8fafc;
+      --sec-surface: #ffffff;
+      --sec-muted: #64748b;
+      --sec-emerald: #059669;
+      --sec-amber: #d97706;
+      --sec-violet: #7c3aed;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--sec-bg);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #1e293b;
+      letter-spacing: -0.011em;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* --- SAVEETHA TOP NAVIGATION BAR --- */
+    .saveetha-header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--sec-border);
+      position: sticky;
+      top: 0;
+      z-index: 1020;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+
+    .top-brand-bar {
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo-badge {
+      background: #1e3a8a;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 0.85rem;
+      letter-spacing: 0.5px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      line-height: 1;
+    }
+
+    .portal-breadcrumbs {
+      background: #ffffff;
+      border-top: 1px solid var(--sec-border-light);
+      padding: 8px 24px;
+      font-size: 0.8rem;
+      color: var(--sec-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* --- MINIMALIST CARDS --- */
+    .saveetha-card {
+      background: #ffffff;
+      border: 1px solid var(--sec-border);
+      border-radius: 10px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .saveetha-card:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.06);
+      transform: translateY(-1px);
+    }
+
+    .target-card-armed {
+      border: 1.5px solid #a855f7 !important;
+      background: #faf5ff !important;
+    }
+
+    .target-card-booked {
+      border: 1.5px solid #10b981 !important;
+      background: #f0fdf4 !important;
+    }
+
+    .matched-portal-card {
+      border: 1.5px solid #10b981 !important;
+      background: #f0fdf4 !important;
+    }
+
+    /* --- MINIMALIST BADGES --- */
+    .badge-pill-sec {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .badge-status-open {
+      background-color: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+    }
+
+    .badge-status-opening-soon {
+      background-color: #fffbeb;
+      color: #b45309;
+      border: 1px solid #fde68a;
+    }
+
+    .badge-status-full {
+      background-color: #f1f5f9;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+    }
+
+    .badge-status-waitlist {
+      background-color: #fefce8;
+      color: #a16207;
+      border: 1px solid #fef08a;
+    }
+
+    .badge-status-booked {
+      background-color: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+    }
+
+    .badge-status-closed {
+      background-color: #f1f5f9;
+      color: #64748b;
+      border: 1px solid #e2e8f0;
+    }
+
+    /* --- MINIMALIST BUTTONS --- */
+    .btn {
+      font-size: 0.8rem;
+      font-weight: 600;
+      border-radius: 6px;
+      padding: 6px 12px;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-sec-primary {
+      background-color: #1e3a8a;
+      border: 1px solid #1e3a8a;
+      color: #ffffff;
+    }
+    .btn-sec-primary:hover {
+      background-color: #172554;
+      border-color: #172554;
+      color: #ffffff;
+    }
+
+    .btn-sec-outline {
+      background-color: #ffffff;
+      border: 1px solid #cbd5e1;
+      color: #334155;
+    }
+    .btn-sec-outline:hover {
+      background-color: #f8fafc;
+      border-color: #94a3b8;
+      color: #0f172a;
+    }
+
+    .btn-sec-emerald {
+      background-color: #059669;
+      border: 1px solid #059669;
+      color: #ffffff;
+    }
+    .btn-sec-emerald:hover {
+      background-color: #047857;
+      border-color: #047857;
+      color: #ffffff;
+    }
+
+    .btn-sec-violet {
+      background-color: #7c3aed;
+      border: 1px solid #7c3aed;
+      color: #ffffff;
+    }
+    .btn-sec-violet:hover {
+      background-color: #6d28d9;
+      border-color: #6d28d9;
+      color: #ffffff;
+    }
+
+    .btn-sec-danger {
+      background-color: #ffffff;
+      border: 1px solid #fca5a5;
+      color: #dc2626;
+    }
+    .btn-sec-danger:hover {
+      background-color: #fef2f2;
+      border-color: #f87171;
+      color: #b91c1c;
+    }
+
+    /* --- FORM CONTROLS --- */
+    .form-control, .form-select {
+      font-size: 0.82rem;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      color: #1e293b;
+      padding: 6px 10px;
+    }
+    .form-control:focus, .form-select:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
+    .form-label-sec {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    /* Pulse dot */
+    .live-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: #10b981;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    }
+
+    /* Toasts */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1090;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sec-toast {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px 16px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      font-size: 0.82rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: slideIn 0.2s ease-out;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Academic Navigation (Saveetha Learner Portal Theme) -->
+  <header class="saveetha-header">
+    <div class="top-brand-bar">
+      <div class="d-flex align-items-center gap-3">
+        <!-- Saveetha Logo / Badge -->
+        <div class="d-flex align-items-center gap-2">
+          <div class="logo-badge">SEC</div>
+          <div>
+            <div class="fw-bold text-dark text-uppercase" style="font-size: 0.85rem; letter-spacing: 0.4px;">Saveetha Engineering College</div>
+            <div class="text-muted" style="font-size: 0.68rem; letter-spacing: 0.4px;">AUTONOMOUS · AFFILIATED TO ANNA UNIVERSITY</div>
+          </div>
+        </div>
+        <div class="vr mx-2 d-none d-md-block text-secondary"></div>
+        <div class="d-none d-md-flex align-items-center gap-1 badge bg-light text-primary border px-2 py-1" style="font-size: 0.72rem;">
+          <i class="bi bi-mortarboard-fill"></i> Learner Portal · FirstShot Engine
+        </div>
+      </div>
+
+      <div class="d-flex align-items-center gap-3">
+        <div id="ws-indicator" class="d-flex align-items-center gap-1 text-muted" style="font-size: 0.75rem;">
+          <span class="live-dot"></span> Live Sync
+        </div>
+        <div id="session-badge" class="badge-pill-sec badge-status-open">
+          <i class="bi bi-shield-check"></i> Session Active
+        </div>
+        <button id="reauth-btn" class="btn btn-sm btn-sec-outline d-none" onclick="triggerReauth()">
+          <i class="bi bi-box-arrow-in-right"></i> Log In
+        </button>
+      </div>
+    </div>
+
+    <!-- Portal Breadcrumbs -->
+    <nav class="portal-breadcrumbs">
+      <div class="d-flex align-items-center gap-1">
+        <a href="#" class="text-decoration-none text-muted"><i class="bi bi-house"></i> Home</a>
+        <span class="mx-1">/</span>
+        <span class="text-muted">Academic Events</span>
+        <span class="mx-1">/</span>
+        <span class="text-dark fw-semibold">Assessment Booking</span>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-light text-secondary border" style="font-size: 0.72rem;">
+          <i class="bi bi-shield-check text-success me-1"></i> Autonomous Engine Online
+        </span>
+      </div>
+    </nav>
+  </header>
+
+  <div class="container-fluid px-4 py-4" style="max-width: 1400px; margin: 0 auto;">
+
+    <!-- Alerts Banner -->
+    <div id="live-alerts"></div>
+
+    <!-- DEDICATED SECTION: My Target Slots -->
+    <div class="saveetha-card mb-4">
+      <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-white" style="border-radius: 10px 10px 0 0;">
+        <div>
+          <div class="d-flex align-items-center gap-2">
+            <h6 class="fw-bold mb-0 text-dark" style="font-size: 0.95rem;">
+              <i class="bi bi-bullseye text-primary me-1"></i> Configured Assessment Targets
+            </h6>
+            <span id="target-count" class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.72rem;">0</span>
+          </div>
+          <div class="text-muted small mt-1" style="font-size: 0.78rem;">
+            Pre-armed slots are autonomously booked when availability opens at 7:00 PM IST.
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sec-outline btn-sm" onclick="loadTargets()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+          </button>
+          <button class="btn btn-sec-primary btn-sm" data-bs-toggle="modal" data-bs-target="#manualTargetModal" onclick="openManualModal()">
+            <i class="bi bi-plus-lg"></i> Add Target
+          </button>
+        </div>
+      </div>
+      <div class="p-3">
+        <div id="targets-container" class="row g-3">
+          <div class="col-12 text-center py-4 text-muted small">
+            <i class="bi bi-info-circle me-1"></i> No targets configured. Select "Select as Target" on any card below or click "Add Target".
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEDICATED SECTION: Autonomous Booking Attempts & Audit Log -->
+    <div class="saveetha-card mb-4">
+      <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-white" style="border-radius: 10px 10px 0 0;">
+        <div>
+          <div class="d-flex align-items-center gap-2">
+            <h6 class="fw-bold mb-0 text-dark" style="font-size: 0.95rem;">
+              <i class="bi bi-clock-history text-secondary me-1"></i> Autonomous Execution Log & Audit Trail
+            </h6>
+            <span id="attempts-count" class="badge bg-secondary-subtle text-secondary border" style="font-size: 0.72rem;">0</span>
+          </div>
+          <div class="text-muted small mt-1" style="font-size: 0.75rem;">
+            <span class="badge bg-success-subtle text-success border border-success-subtle me-1"><i class="bi bi-shield-check"></i> 5-Min Crash Resilience Active</span>
+            Persistent audit records of bookings executed, server response verifications, and surge retries.
+          </div>
+        </div>
+        <button class="btn btn-sec-outline btn-sm" onclick="loadAttempts()">
+          <i class="bi bi-arrow-clockwise"></i> Refresh Log
+        </button>
+      </div>
+      <div class="p-0">
+        <div class="table-responsive">
+          <table class="table table-hover table-sm align-middle mb-0" style="font-size: 0.8rem;">
+            <thead class="table-light text-muted">
+              <tr style="border-bottom: 1px solid var(--sec-border);">
+                <th class="ps-3 py-2">Timestamp</th>
+                <th>Target Session ID</th>
+                <th>Mode</th>
+                <th>Status</th>
+                <th>Tries</th>
+                <th>Verified</th>
+                <th>Duration</th>
+                <th>Server Audit Message</th>
+              </tr>
+            </thead>
+            <tbody id="attempts-tbody">
+              <tr>
+                <td colspan="8" class="text-center py-3 text-muted ps-3">
+                  <i class="bi bi-info-circle me-1"></i> No booking attempts recorded yet.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Toolbar (1:1 Saveetha Learner Portal Filter Bar) -->
+    <div class="saveetha-card mb-4">
+      <div class="p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="fw-semibold text-dark small"><i class="bi bi-funnel me-1"></i> Filter Assessments & Event Sessions</div>
+          <span id="loading-spinner" class="spinner-border spinner-border-sm text-primary d-none" role="status"></span>
+        </div>
+        <form id="filter-form" class="row g-2 align-items-end" onsubmit="event.preventDefault(); applyFilters();">
+          <div class="col-md-3">
+            <label class="form-label-sec">Academic Term</label>
+            <select id="filter-term" class="form-select">
+              <option value="">All Terms</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label-sec">From Date</label>
+            <input id="filter-date-from" type="date" class="form-control">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label-sec">To Date</label>
+            <input id="filter-date-to" type="date" class="form-control">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label-sec">Slot Name</label>
+            <input id="filter-slot-name" type="text" class="form-control" placeholder="e.g. Module Assessment">
+          </div>
+          <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-sec-primary flex-fill">
+              <i class="bi bi-search"></i> Apply
+            </button>
+            <button type="button" class="btn btn-sec-outline" onclick="resetFilters()">
+              Reset
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Event Cards Grid Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div class="d-flex align-items-center gap-2">
+        <h6 class="fw-bold mb-0 text-dark" style="font-size: 0.95rem;">
+          Discovered Assessment Sessions
+        </h6>
+        <span id="events-count" class="badge bg-secondary-subtle text-secondary border" style="font-size: 0.72rem;">0</span>
+      </div>
+      <div class="text-muted small" style="font-size: 0.78rem;">
+        Click <strong>"Select as Target"</strong> to arm any slot for autonomous execution.
+      </div>
+    </div>
+
+    <!-- Event Cards Grid -->
+    <div id="events-grid" class="row g-3">
+      <div class="col-12 text-center py-5">
+        <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+        <p class="text-muted small mt-2">Loading assessment slots from Saveetha Learner Portal...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Method B: Manual Target Configuration Modal -->
+  <div class="modal fade" id="manualTargetModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content saveetha-card border-0 shadow">
+        <div class="modal-header border-bottom py-3">
+          <h6 class="modal-title fw-bold text-dark"><i class="bi bi-sliders me-1"></i> Configure Assessment Target</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <form id="manual-target-form" onsubmit="event.preventDefault(); saveManualTarget();">
+            <div class="mb-3">
+              <label class="form-label-sec">Assessment Title *</label>
+              <input id="manual-title" type="text" class="form-control" value="Module Assessment" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label-sec">Target Date *</label>
+              <input id="manual-date" type="date" class="form-control" onchange="fetchRoomsAndSessions()" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label-sec">Room Selector (Discovered on Portal) *</label>
+              <select id="manual-room" class="form-select" onchange="fetchSessionsForRoom()" required>
+                <option value="">Select a room...</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label-sec">Session Time Slot *</label>
+              <select id="manual-session" class="form-select" required>
+                <option value="">Select a date & room first...</option>
+              </select>
+              <div id="manual-session-msg"></div>
+            </div>
+            <div class="form-check mb-2">
+              <input id="manual-waitlist" class="form-check-input" type="checkbox">
+              <label class="form-check-label small" for="manual-waitlist">Accept Waitlist if session is full</label>
+            </div>
+            <div class="form-check mb-3">
+              <input id="manual-monitoring" class="form-check-input" type="checkbox" checked>
+              <label class="form-check-label small" for="manual-monitoring">Enable Live Availability Monitoring</label>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-4">
+              <button type="button" class="btn btn-sec-outline" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-sec-primary">Save Target</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Milestone 3: Arming Modal for AUTO_BOOK -->
+  <div class="modal fade" id="armModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content saveetha-card border-0 shadow">
+        <div class="modal-header border-bottom py-3">
+          <h6 class="modal-title fw-bold text-dark d-flex align-items-center gap-2">
+            <i class="bi bi-shield-check text-purple" style="color: #7c3aed;"></i> Pre-Arm for Autonomous Booking
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="p-3 rounded mb-3" style="background: #faf5ff; border: 1px solid #f3e8ff;">
+            <div class="fw-bold text-dark" id="arm-modal-title">Module Assessment</div>
+            <div class="text-muted small mt-1" id="arm-modal-details">20 Nov 2026 · Room 1731 · 08:00 - 09:29</div>
+            <div class="small fw-semibold mt-2" style="color: #6b21a8;" id="arm-modal-window">
+              <i class="bi bi-clock-history me-1"></i> Opening Window: Today, 7:00 PM IST
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label-sec">Purpose for Attending *</label>
+            <input type="text" id="arm-purpose" class="form-control" value="Academic Continuous Assessment" maxlength="255" required>
+            <div class="text-muted mt-1" style="font-size: 0.72rem;">Required by Saveetha booking portal form.</div>
+          </div>
+
+          <div class="form-check mb-3">
+            <input type="checkbox" class="form-check-input" id="arm-accept-waitlist">
+            <label class="form-check-label small" for="arm-accept-waitlist">Accept waitlist if regular seats fill instantly</label>
+          </div>
+
+          <div class="p-3 rounded mb-3" style="background: #fff1f2; border: 1px solid #fecdd3;">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input" id="arm-permission-check" onchange="toggleArmButton()">
+              <label class="form-check-label small fw-semibold text-danger" for="arm-permission-check">
+                I explicitly authorize FirstShot to execute ONE automated booking attempt when the booking window opens, in accordance with college portal rules.
+              </label>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-sec-outline" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-sec-violet" id="arm-submit-btn" disabled onclick="executeArmTarget()">
+              <i class="bi bi-shield-lock-fill"></i> Authorize & Arm Target
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preflight Modal -->
+  <div class="modal fade" id="preflightModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content saveetha-card border-0 shadow">
+        <div class="modal-header border-bottom py-3">
+          <h6 class="modal-title fw-bold text-dark"><i class="bi bi-clipboard-check me-1"></i> Preflight Verification Audit</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4" id="preflight-modal-body">
+          Loading preflight checks...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assist Review Modal -->
+  <div class="modal fade" id="bookingReviewModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content saveetha-card border-0 shadow">
+        <div class="modal-header border-bottom py-3">
+          <h6 class="modal-title fw-bold text-dark"><i class="bi bi-bookmark-check me-1"></i> Review & Confirm Booking</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4" id="review-modal-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Stack -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let activePreparedPayload = null;
+    let targets = [];
+    let armingTargetId = null;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      await checkSession();
+      await loadTerms();
+      await loadTargets();
+      await loadAttempts();
+      await applyFilters();
+      initWebSocket();
+    });
+
+    function showToast(message, type = "info") {
+      const container = document.getElementById("toast-container");
+      const toast = document.createElement("div");
+      toast.className = "sec-toast";
+      
+      let icon = `<i class="bi bi-info-circle text-primary"></i>`;
+      if (type === "success") icon = `<i class="bi bi-check-circle-fill text-success"></i>`;
+      else if (type === "warning") icon = `<i class="bi bi-exclamation-triangle-fill text-warning"></i>`;
+      else if (type === "danger" || type === "error") icon = `<i class="bi bi-x-circle-fill text-danger"></i>`;
+
+      toast.innerHTML = `${icon} <span>${escapeHtml(message)}</span>`;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateX(100%)";
+        toast.style.transition = "all 0.3s ease";
+        setTimeout(() => toast.remove(), 300);
+      }, 5000);
+    }
+
+    async function loadTerms() {
+      try {
+        const res = await fetch("/api/events/terms");
+        const terms = await res.json();
+        const select = document.getElementById("filter-term");
+        select.innerHTML = "";
+        terms.forEach(t => {
+          const opt = document.createElement("option");
+          opt.value = t.value;
+          opt.textContent = t.name;
+          select.appendChild(opt);
+        });
+      } catch (e) {
+        console.error("Failed to load terms:", e);
+      }
+    }
+
+    async function checkSession() {
+      try {
+        const res = await fetch("/api/session/status");
+        const data = await res.json();
+        const badge = document.getElementById("session-badge");
+        const reauthBtn = document.getElementById("reauth-btn");
+
+        if (data.authenticated) {
+          badge.className = "badge-pill-sec badge-status-open";
+          badge.innerHTML = `<i class="bi bi-shield-check"></i> Session Active`;
+          reauthBtn.classList.add("d-none");
+        } else {
+          badge.className = "badge-pill-sec badge-status-full";
+          badge.innerHTML = `<i class="bi bi-shield-x"></i> Session Expired`;
+          reauthBtn.classList.remove("d-none");
+        }
+      } catch (e) {
+        console.error("Error checking session:", e);
+      }
+    }
+
+    async function triggerReauth() {
+      alert("Launching local browser window. Please complete the login in the window that appears.");
+      await fetch("/api/session/reauthenticate", { method: "POST" });
+      await checkSession();
+    }
+
+    // --- TARGET SLOTS MANAGEMENT ---
+    async function loadTargets() {
+      try {
+        const res = await fetch("/api/preferences/");
+        targets = await res.json();
+        document.getElementById("target-count").textContent = targets.length;
+        renderTargets(targets);
+      } catch (e) {
+        console.error("Error loading targets:", e);
+      }
+    }
+
+    function renderTargets(targetList) {
+      const container = document.getElementById("targets-container");
+      if (!targetList || targetList.length === 0) {
+        container.innerHTML = `
+          <div class="col-12 text-center py-4 text-muted small">
+            <i class="bi bi-info-circle me-1"></i> No targets configured yet. Select "Select as Target" on any card below or click "Add Target".
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = targetList.map(t => {
+        const status = t.current_status || "Opening Soon";
+        const isBooked = (status === "Booked" || t.execution_status === "SUCCESS");
+        const isArmed = (t.booking_mode === "AUTO_BOOK" && t.is_armed);
+
+        let cardThemeClass = "saveetha-card";
+        if (isBooked) cardThemeClass += " target-card-booked";
+        else if (isArmed) cardThemeClass += " target-card-armed";
+
+        let statusBadge = `<span class="badge-pill-sec badge-status-opening-soon">${escapeHtml(status)}</span>`;
+        if (isBooked) statusBadge = `<span class="badge-pill-sec badge-status-booked"><i class="bi bi-check-circle-fill"></i> Booked</span>`;
+        else if (status === "Open") statusBadge = `<span class="badge-pill-sec badge-status-open">Open</span>`;
+        else if (status === "Full") statusBadge = `<span class="badge-pill-sec badge-status-full">Full</span>`;
+        else if (status === "Waitlist Open") statusBadge = `<span class="badge-pill-sec badge-status-waitlist">Waitlist Open</span>`;
+
+        let modeBadge = `<span class="badge bg-light text-secondary border small">OBSERVE</span>`;
+        if (isArmed) {
+          modeBadge = `<span class="badge bg-purple-subtle text-purple border small" style="background:#f5f3ff; color:#7c3aed; border-color:#ddd6fe;"><i class="bi bi-shield-lock-fill"></i> AUTO_BOOK (ARMED)</span>`;
+        } else if (t.booking_mode === "AUTO_BOOK" && !t.is_armed) {
+          modeBadge = `<span class="badge bg-light text-secondary border small">AUTO_BOOK (DISARMED)</span>`;
+        } else if (t.booking_mode === "ASSIST") {
+          modeBadge = `<span class="badge bg-light text-primary border small">ASSIST</span>`;
+        }
+
+        let preflightBadge = `<span class="badge bg-light text-muted border small" role="button" onclick="runPreflightForTarget(${t.id})"><i class="bi bi-clipboard-check"></i> Preflight Check</span>`;
+        if (t.last_preflight_status === "PASSED") {
+          preflightBadge = `<span class="badge bg-success-subtle text-success border border-success-subtle small" role="button" onclick="viewPreflightDetails(${t.id})"><i class="bi bi-shield-check"></i> Preflight: PASSED</span>`;
+        } else if (t.last_preflight_status === "FAILED") {
+          preflightBadge = `<span class="badge bg-danger-subtle text-danger border border-danger-subtle small" role="button" onclick="viewPreflightDetails(${t.id})"><i class="bi bi-shield-x"></i> Preflight: FAILED</span>`;
+        }
+
+        let actionButtonHtml = "";
+        if (isBooked) {
+          actionButtonHtml = `
+            <div class="p-2 rounded d-flex align-items-center justify-content-between mb-2" style="background: #ecfdf5; border: 1px solid #a7f3d0;">
+              <div class="small fw-bold text-success"><i class="bi bi-check-circle-fill me-1"></i> Booking Confirmed!</div>
+              <span class="text-muted small" style="font-size: 0.72rem;">Room ${escapeHtml(t.preferred_room)}</span>
+            </div>
+          `;
+        } else if (isArmed) {
+          actionButtonHtml = `
+            <button class="btn btn-sec-danger btn-sm w-100 mb-2" onclick="disarmTarget(${t.id})">
+              <i class="bi bi-shield-slash"></i> Disarm AUTO_BOOK
+            </button>
+          `;
+        } else {
+          actionButtonHtml = `
+            <button class="btn btn-sec-violet btn-sm w-100 mb-2" onclick="openArmModal(${t.id})">
+              <i class="bi bi-shield-check"></i> Arm AUTO_BOOK
+            </button>
+          `;
+        }
+
+        return `
+          <div class="col-md-6 col-lg-4">
+            <div class="${cardThemeClass} p-3 h-100 d-flex flex-column gap-2">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <h6 class="fw-bold mb-0 text-dark" style="font-size: 0.95rem;">${escapeHtml(t.event_title || t.title)}</h6>
+                  <div class="text-muted small mt-1 font-monospace" style="font-size: 0.72rem;">
+                    Portal ID: ${escapeHtml(t.target_event_id || 'N/A')}
+                  </div>
+                </div>
+                <div>${statusBadge}</div>
+              </div>
+
+              <div class="small text-muted py-2 border-top border-bottom my-1 d-flex flex-column gap-1" style="font-size: 0.78rem;">
+                <div><i class="bi bi-calendar-event me-1"></i> <strong>Date:</strong> ${escapeHtml(t.target_date || t.preferred_date || 'Any')}</div>
+                <div><i class="bi bi-geo-alt me-1"></i> <strong>Room:</strong> ${escapeHtml(t.preferred_room || t.preferred_venue || 'Any')}</div>
+                <div><i class="bi bi-clock me-1"></i> <strong>Time:</strong> ${escapeHtml(t.preferred_start_time || t.preferred_time || 'Any')} ${t.preferred_end_time ? '– ' + escapeHtml(t.preferred_end_time) : ''}</div>
+                ${t.purpose ? `<div><i class="bi bi-chat-left-text me-1"></i> <strong>Purpose:</strong> "${escapeHtml(t.purpose)}"</div>` : ''}
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center">
+                ${modeBadge}
+                ${preflightBadge}
+              </div>
+
+              <div class="mt-auto pt-2">
+                ${actionButtonHtml}
+
+                <div class="d-flex justify-content-between align-items-center pt-2 border-top gap-1">
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-xs py-0 ${t.booking_mode === 'OBSERVE' ? 'btn-secondary text-white' : 'btn-outline-secondary'}" onclick="setTargetMode(${t.id}, 'OBSERVE')">Observe</button>
+                    <button class="btn btn-xs py-0 ${t.booking_mode === 'ASSIST' ? 'btn-primary text-white' : 'btn-outline-secondary'}" onclick="setTargetMode(${t.id}, 'ASSIST')">Assist</button>
+                    <button class="btn btn-xs py-0 ${t.booking_mode === 'AUTO_BOOK' ? 'btn-dark text-white' : 'btn-outline-secondary'}" onclick="openArmModal(${t.id})">Auto-Book</button>
+                  </div>
+                  <div class="d-flex gap-1 ms-auto">
+                    <button class="btn btn-sm btn-sec-outline py-0 px-2" style="font-size: 0.75rem;" onclick="toggleTargetMonitoring(${t.id})" title="${t.monitoring_enabled ? 'Pause' : 'Resume'}">
+                      <i class="bi ${t.monitoring_enabled ? 'bi-pause' : 'bi-play'}"></i>
+                    </button>
+                    <button class="btn btn-sm btn-sec-danger py-0 px-2" style="font-size: 0.75rem;" onclick="removeTarget(${t.id})" title="Remove">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // --- EVENTS RENDERING (1:1 SAVEETHA PORTAL LOOK) ---
+    function renderEvents(events) {
+      const container = document.getElementById("events-grid");
+      document.getElementById("events-count").textContent = events.length;
+
+      if (!events || events.length === 0) {
+        container.innerHTML = `
+          <div class="col-12 text-center py-5 text-muted small">
+            <i class="bi bi-calendar-x fs-2 d-block mb-2 text-muted"></i>
+            No assessment or event sessions found matching your filters.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = events.map(evt => {
+        let badgeClass = "badge-status-closed";
+        if (evt.booking_status === "Open") badgeClass = "badge-status-open";
+        else if (evt.booking_status === "Waitlist Open") badgeClass = "badge-status-waitlist";
+        else if (evt.booking_status === "Opening Soon") badgeClass = "badge-status-opening-soon";
+        else if (evt.booking_status === "Full") badgeClass = "badge-status-full";
+        else if (evt.booking_status === "Booked") badgeClass = "badge-status-booked";
+
+        const matchedClass = evt.matched ? "matched-portal-card" : "";
+
+        return `
+          <div class="col-md-6 col-lg-4">
+            <div class="saveetha-card p-3 h-100 d-flex flex-column gap-2 ${matchedClass}">
+              <div class="d-flex justify-content-between align-items-start gap-2">
+                <div>
+                  <h6 class="fw-bold mb-1 text-dark" style="font-size: 0.95rem;">${escapeHtml(evt.title)}</h6>
+                  <div class="text-muted small" style="font-size: 0.78rem;">
+                    <i class="bi bi-calendar3 me-1"></i> ${escapeHtml(evt.date)} · ${escapeHtml(evt.start_time)} - ${escapeHtml(evt.end_time)}
+                  </div>
+                  ${evt.venue ? `<div class="text-muted small" style="font-size: 0.78rem;"><i class="bi bi-geo-alt me-1"></i> Venue: <strong>${escapeHtml(evt.venue)}</strong></div>` : ''}
+                </div>
+                <span class="badge-pill-sec ${badgeClass}">${escapeHtml(evt.booking_status)}</span>
+              </div>
+
+              ${evt.matched ? `
+                <div class="badge bg-success-subtle text-success border border-success-subtle small py-1" style="font-size: 0.72rem;">
+                  <i class="bi bi-star-fill me-1"></i> Match: Your Configured Target (${evt.match_score}%)
+                </div>
+              ` : ''}
+
+              <div class="small text-muted py-2 border-top border-bottom my-1 d-flex flex-column gap-1" style="font-size: 0.75rem;">
+                ${evt.booking_window_start ? `<div><i class="bi bi-door-open me-1"></i> Window: ${escapeHtml(evt.booking_window_start)} → ${escapeHtml(evt.booking_window_end || '')}</div>` : ''}
+                ${evt.capacity ? `<div><i class="bi bi-people me-1"></i> Capacity: <strong>${escapeHtml(evt.capacity)}</strong> · Waitlist: ${escapeHtml(evt.waitlist_capacity || '0/0')}</div>` : ''}
+                <div class="d-flex gap-1 mt-1">
+                  <span class="badge bg-light text-secondary border" style="font-size: 0.68rem;">Reward Points: 0</span>
+                  <span class="badge bg-light text-secondary border" style="font-size: 0.68rem;">ClassAttendance: Regular</span>
+                </div>
+              </div>
+
+              <div class="mt-auto pt-2 d-flex gap-2">
+                <button class="btn btn-sec-outline btn-sm flex-fill" onclick="selectCardAsTarget('${evt.event_id}', '${escapeJs(evt.title)}', '${escapeJs(evt.date)}', '${escapeJs(evt.start_time)}', '${escapeJs(evt.end_time)}', '${escapeJs(evt.venue || '')}')">
+                  <i class="bi bi-bullseye text-primary"></i> Select as Target
+                </button>
+                ${(evt.can_book || evt.has_waitlist) ? `
+                  <button class="btn btn-sec-primary btn-sm" title="Prepare Booking" onclick="prepareBooking('${evt.event_id}')">
+                    <i class="bi bi-lightning-charge"></i> Book
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // --- AUDIT ATTEMPTS TABLE ---
+    async function loadAttempts() {
+      try {
+        const res = await fetch("/api/booking/attempts");
+        const attempts = await res.json();
+        const tbody = document.getElementById("attempts-tbody");
+        document.getElementById("attempts-count").textContent = attempts.length;
+
+        if (!attempts || attempts.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="8" class="text-center py-3 text-muted ps-3 small">
+                <i class="bi bi-info-circle me-1"></i> No booking attempts recorded yet.
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = attempts.map(a => {
+          let statusBadge = `<span class="badge bg-secondary">${escapeHtml(a.status)}</span>`;
+          if (a.status === "CONFIRMED") statusBadge = `<span class="badge bg-success"><i class="bi bi-check-circle-fill"></i> CONFIRMED</span>`;
+          else if (a.status === "INITIATED") statusBadge = `<span class="badge bg-primary"><i class="bi bi-arrow-repeat spin"></i> INITIATED</span>`;
+          else if (a.status === "RETRYING") statusBadge = `<span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat spin"></i> RETRYING</span>`;
+          else if (a.status === "FAILED") statusBadge = `<span class="badge bg-danger"><i class="bi bi-x-circle-fill"></i> FAILED</span>`;
+          else if (a.status === "PREFLIGHT_FAILED") statusBadge = `<span class="badge bg-warning text-dark"><i class="bi bi-shield-x"></i> PREFLIGHT FAILED</span>`;
+
+          const verifiedBadge = a.verified
+            ? `<span class="badge bg-success-subtle text-success border border-success-subtle">✓ Verified</span>`
+            : `<span class="badge bg-secondary-subtle text-secondary border">Unverified</span>`;
+
+          const retryBadge = a.retry_count && a.retry_count > 1
+            ? `<span class="badge bg-info-subtle text-info border border-info-subtle">${a.retry_count} tries</span>`
+            : `<span class="text-muted small">1</span>`;
+
+          return `
+            <tr>
+              <td class="ps-3 font-monospace small text-muted">${new Date(a.attempted_at).toLocaleTimeString()}</td>
+              <td class="font-monospace small">${escapeHtml(a.session_id || a.target_event_id || 'N/A')}</td>
+              <td><span class="badge bg-light text-dark border small">${escapeHtml(a.mode)}</span></td>
+              <td>${statusBadge}</td>
+              <td>${retryBadge}</td>
+              <td>${verifiedBadge}</td>
+              <td class="small text-muted">${a.execution_duration_ms ? a.execution_duration_ms + 'ms' : '—'}</td>
+              <td class="small text-dark">${escapeHtml(a.response_message || '—')}</td>
+            </tr>
+          `;
+        }).join("");
+      } catch (e) {
+        console.error("Error loading attempts:", e);
+      }
+    }
+
+    // --- FILTERS ---
+    async function applyFilters() {
+      const spinner = document.getElementById("loading-spinner");
+      spinner.classList.remove("d-none");
+      try {
+        const term = document.getElementById("filter-term").value;
+        const fromDate = document.getElementById("filter-date-from").value;
+        const toDate = document.getElementById("filter-date-to").value;
+        const slotName = document.getElementById("filter-slot-name").value;
+
+        const params = new URLSearchParams();
+        if (term) params.append("event_term", term);
+        if (fromDate) params.append("date_from", fromDate);
+        if (toDate) params.append("date_to", toDate);
+        if (slotName) params.append("slot_name", slotName);
+
+        const res = await fetch(`/api/events/?${params.toString()}`);
+        const events = await res.json();
+        renderEvents(events);
+      } catch (e) {
+        console.error("Failed to load events:", e);
+      } finally {
+        spinner.classList.add("d-none");
+      }
+    }
+
+    function resetFilters() {
+      document.getElementById("filter-term").value = "";
+      document.getElementById("filter-date-from").value = "";
+      document.getElementById("filter-date-to").value = "";
+      document.getElementById("filter-slot-name").value = "";
+      applyFilters();
+    }
+
+    // --- ACTIONS & MODALS ---
+    async function selectCardAsTarget(eventId, title, date, startTime, endTime, venue) {
+      try {
+        const res = await fetch("/api/preferences/from-card", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event_id: eventId,
+            title: title,
+            date: date,
+            start_time: startTime,
+            end_time: endTime,
+            venue: venue,
+            accept_waitlist: false,
+            monitoring_enabled: true
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast(data.detail || "Could not save target slot.", "warning");
+          return;
+        }
+
+        showToast(`Target Slot '${title}' (${venue}, ${startTime}) saved!`, "success");
+        await loadTargets();
+        await applyFilters();
+      } catch (e) {
+        showToast("Error saving target slot: " + e.message, "danger");
+      }
+    }
+
+    async function removeTarget(targetId) {
+      if (!confirm("Are you sure you want to remove this target?")) return;
+      try {
+        await fetch(`/api/preferences/${targetId}`, { method: "DELETE" });
+        showToast("Target removed.", "info");
+        await loadTargets();
+        await applyFilters();
+      } catch (e) {
+        showToast("Error removing target: " + e.message, "danger");
+      }
+    }
+
+    async function toggleTargetMonitoring(targetId) {
+      try {
+        await fetch(`/api/preferences/${targetId}/toggle`, { method: "PUT" });
+        await loadTargets();
+      } catch (e) {
+        showToast("Error updating monitoring: " + e.message, "danger");
+      }
+    }
+
+    async function setTargetMode(targetId, mode) {
+      try {
+        const res = await fetch(`/api/preferences/${targetId}/mode`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ booking_mode: mode })
+        });
+        if (res.ok) {
+          showToast(`Target mode updated to ${mode}.`, "info");
+          await loadTargets();
+        }
+      } catch (e) {
+        showToast("Error setting mode: " + e.message, "danger");
+      }
+    }
+
+    function openArmModal(targetId) {
+      const t = targets.find(item => item.id === targetId);
+      if (!t) return;
+      armingTargetId = targetId;
+
+      document.getElementById("arm-modal-title").textContent = t.event_title || t.title;
+      document.getElementById("arm-modal-details").textContent = `${t.target_date || t.preferred_date} · Room ${t.preferred_room || t.preferred_venue} · ${t.preferred_start_time || t.preferred_time}`;
+      document.getElementById("arm-purpose").value = t.purpose || "Academic Continuous Assessment";
+      document.getElementById("arm-accept-waitlist").checked = !!t.accept_waitlist;
+      document.getElementById("arm-permission-check").checked = false;
+      document.getElementById("arm-submit-btn").disabled = true;
+
+      new bootstrap.Modal(document.getElementById("armModal")).show();
+    }
+
+    function toggleArmButton() {
+      const checked = document.getElementById("arm-permission-check").checked;
+      document.getElementById("arm-submit-btn").disabled = !checked;
+    }
+
+    async function executeArmTarget() {
+      if (!armingTargetId) return;
+      const purpose = document.getElementById("arm-purpose").value.trim();
+      const acceptWaitlist = document.getElementById("arm-accept-waitlist").checked;
+
+      try {
+        const res = await fetch(`/api/preferences/${armingTargetId}/arm`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            purpose: purpose,
+            accept_waitlist: acceptWaitlist,
+            user_permitted_automation: true,
+            booking_mode: "AUTO_BOOK"
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Could not arm target: ${data.detail || 'Preflight checks failed'}`);
+          return;
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById("armModal")).hide();
+        showToast(`Target armed for AUTO_BOOK! Preflight: ${data.preflight?.passed ? 'PASSED' : 'WARNING'}`, "success");
+        await loadTargets();
+      } catch (e) {
+        alert("Error arming target: " + e.message);
+      }
+    }
+
+    async function disarmTarget(targetId) {
+      try {
+        const res = await fetch(`/api/preferences/${targetId}/disarm`, { method: "PUT" });
+        if (res.ok) {
+          showToast("Target disarmed.", "info");
+          await loadTargets();
+        }
+      } catch (e) {
+        showToast("Error disarming target: " + e.message, "danger");
+      }
+    }
+
+    async function runPreflightForTarget(targetId) {
+      showToast("Running live preflight checks against college portal...", "info");
+      try {
+        const res = await fetch(`/api/preferences/${targetId}/preflight`, { method: "POST" });
+        const report = await res.json();
+        renderPreflightModal(report);
+        await loadTargets();
+      } catch (e) {
+        showToast("Error executing preflight: " + e.message, "danger");
+      }
+    }
+
+    function viewPreflightDetails(targetId) {
+      const target = targets.find(t => t.id === targetId);
+      if (!target || !target.last_preflight_details) {
+        runPreflightForTarget(targetId);
+        return;
+      }
+      try {
+        const checks = JSON.parse(target.last_preflight_details);
+        renderPreflightModal({
+          target_title: target.event_title,
+          target_room: target.preferred_room,
+          target_date: target.target_date,
+          target_time: target.preferred_start_time,
+          passed: target.last_preflight_status === "PASSED",
+          timestamp: target.last_preflight_at,
+          summary: target.last_preflight_status === "PASSED" ? "ALL PREFLIGHT CHECKS PASSED: Target verified." : "PREFLIGHT CHECKS FAILED.",
+          checks: checks
+        });
+      } catch (e) {
+        runPreflightForTarget(targetId);
+      }
+    }
+
+    function renderPreflightModal(report) {
+      const body = document.getElementById("preflight-modal-body");
+      const statusBanner = report.passed
+        ? `<div class="p-3 rounded mb-3" style="background:#ecfdf5; border:1px solid #a7f3d0; color:#047857; font-size:0.85rem; font-weight:600;"><i class="bi bi-shield-check me-1"></i> ${escapeHtml(report.summary)}</div>`
+        : `<div class="p-3 rounded mb-3" style="background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; font-size:0.85rem; font-weight:600;"><i class="bi bi-shield-x me-1"></i> ${escapeHtml(report.summary)}</div>`;
+
+      const checksHtml = (report.checks || []).map(c => `
+        <div class="p-2 rounded mb-2 border d-flex justify-content-between align-items-center" style="background: ${c.passed ? '#f0fdf4' : '#fef2f2'}; font-size: 0.8rem;">
+          <div>
+            <strong>${c.passed ? '✓' : '✕'} ${escapeHtml(c.name)}</strong>
+            <div class="text-muted" style="font-size: 0.75rem;">${escapeHtml(c.detail)}</div>
+          </div>
+          <span class="badge ${c.passed ? 'bg-success' : 'bg-danger'}">${c.passed ? 'PASS' : 'FAIL'}</span>
+        </div>
+      `).join("");
+
+      body.innerHTML = `
+        <div class="mb-3 small text-muted">Target: <strong>${escapeHtml(report.target_title || '')}</strong> (Room ${escapeHtml(report.target_room || '')}, ${escapeHtml(report.target_date || '')})</div>
+        ${statusBanner}
+        <div class="mb-3">${checksHtml}</div>
+        <div class="d-flex justify-content-end"><button class="btn btn-sec-outline" data-bs-dismiss="modal">Close</button></div>
+      `;
+      new bootstrap.Modal(document.getElementById("preflightModal")).show();
+    }
+
+    async function prepareBooking(eventId) {
+      try {
+        const res = await fetch("/api/booking/prepare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event_id: eventId, purpose: "Academic Continuous Assessment" })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Error: ${data.detail || 'Could not prepare booking'}`);
+          return;
+        }
+        activePreparedPayload = data;
+        renderReviewModal(data);
+      } catch (e) {
+        alert("Error preparing booking: " + e.message);
+      }
+    }
+
+    function renderReviewModal(data) {
+      const body = document.getElementById("review-modal-body");
+      body.innerHTML = `
+        <div class="p-3 rounded mb-3" style="background:#f8fafc; border:1px solid #e2e8f0; font-size:0.85rem;">
+          <div><strong>Event:</strong> ${escapeHtml(data.title)}</div>
+          <div><strong>Venue:</strong> Room ${escapeHtml(data.venue || 'N/A')}</div>
+          <div><strong>Session ID:</strong> <code>${escapeHtml(data.session_id)}</code></div>
+          <div><strong>Action:</strong> <span class="badge bg-primary">${escapeHtml(data.booking_action)}</span></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label-sec">Purpose for Attending *</label>
+          <input type="text" id="confirm-purpose" class="form-control" value="${escapeHtml(data.purpose)}" maxlength="255">
+        </div>
+        <div class="form-check mb-3">
+          <input type="checkbox" class="form-check-input" id="confirm-agree" onchange="document.getElementById('confirm-btn').disabled = !this.checked;">
+          <label class="form-check-label small" for="confirm-agree">I confirm that I want FirstShot to submit this booking to the college portal.</label>
+        </div>
+        <div class="d-flex justify-content-end gap-2">
+          <button class="btn btn-sec-outline" data-bs-dismiss="modal">Cancel</button>
+          <button id="confirm-btn" class="btn btn-sec-emerald" disabled onclick="executeControlledSubmission()">Confirm & Submit</button>
+        </div>
+      `;
+      new bootstrap.Modal(document.getElementById("bookingReviewModal")).show();
+    }
+
+    async function executeControlledSubmission() {
+      if (!activePreparedPayload) return;
+      const btn = document.getElementById("confirm-btn");
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Submitting...`;
+
+      try {
+        const res = await fetch("/api/booking/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event_id: activePreparedPayload.event_id,
+            session_id: activePreparedPayload.session_id,
+            purpose: document.getElementById("confirm-purpose").value.trim(),
+            booking_action: activePreparedPayload.booking_action,
+            user_confirmed: true
+          })
+        });
+        const result = await res.json();
+        bootstrap.Modal.getInstance(document.getElementById("bookingReviewModal")).hide();
+        if (result.success) {
+          showToast(`✓ Booking Confirmed: ${result.message}`, "success");
+        } else {
+          showToast(`Submission finished: ${result.message}`, "warning");
+        }
+        await loadTargets();
+        await loadAttempts();
+        await applyFilters();
+      } catch (e) {
+        alert("Submission error: " + e.message);
+      }
+    }
+
+    // --- MANUAL MODAL CONTROLS ---
+    async function openManualModal() {
+      await fetchRoomsAndSessions();
+    }
+
+    async function fetchRoomsAndSessions() {
+      const date = document.getElementById("manual-date").value;
+      try {
+        const res = await fetch(`/api/preferences/meta/rooms?date=${encodeURIComponent(date)}`);
+        const data = await res.json();
+        const roomSelect = document.getElementById("manual-room");
+        roomSelect.innerHTML = `<option value="">Select a room...</option>`;
+
+        const defaultRooms = ["1731", "1851", "1852"];
+        const combined = Array.from(new Set([...defaultRooms, ...(data.rooms || [])]));
+        combined.forEach(r => {
+          const opt = document.createElement("option");
+          opt.value = r;
+          opt.textContent = `Room ${r}`;
+          roomSelect.appendChild(opt);
+        });
+
+        if (roomSelect.value) fetchSessionsForRoom();
+      } catch (e) {
+        console.error("Error loading rooms:", e);
+      }
+    }
+
+    async function fetchSessionsForRoom() {
+      const date = document.getElementById("manual-date").value;
+      const room = document.getElementById("manual-room").value;
+      const title = document.getElementById("manual-title").value;
+      const sessionSelect = document.getElementById("manual-session");
+      const msg = document.getElementById("manual-session-msg");
+
+      if (!room || !date) return;
+      sessionSelect.innerHTML = `<option value="">Loading sessions...</option>`;
+      msg.textContent = "";
+
+      try {
+        const res = await fetch(`/api/preferences/meta/sessions?date=${encodeURIComponent(date)}&room=${encodeURIComponent(room)}&title=${encodeURIComponent(title)}`);
+        const data = await res.json();
+
+        sessionSelect.innerHTML = "";
+        if (!data.found || !data.sessions || data.sessions.length === 0) {
+          sessionSelect.innerHTML = `<option value="">No sessions found</option>`;
+          msg.textContent = `⚠️ No matching sessions exist on ${date} for Room ${room}.`;
+          msg.className = "small text-danger mt-1";
+          return;
+        }
+
+        msg.textContent = `✓ Found ${data.count} actual sessions for Room ${room}.`;
+        msg.className = "small text-success mt-1";
+
+        data.sessions.forEach(s => {
+          const opt = document.createElement("option");
+          opt.value = `${s.start_time}|${s.end_time}|${s.event_id}`;
+          opt.textContent = `${s.start_time} – ${s.end_time} (${s.booking_status})`;
+          sessionSelect.appendChild(opt);
+        });
+      } catch (e) {
+        console.error("Error fetching sessions:", e);
+      }
+    }
+
+    async function saveManualTarget() {
+      const title = document.getElementById("manual-title").value;
+      const date = document.getElementById("manual-date").value;
+      const room = document.getElementById("manual-room").value;
+      const sessionVal = document.getElementById("manual-session").value;
+      const waitlist = document.getElementById("manual-waitlist").checked;
+      const monitoring = document.getElementById("manual-monitoring").checked;
+
+      if (!sessionVal || !sessionVal.includes("|")) {
+        alert("Please select a valid session time from the list.");
+        return;
+      }
+
+      const [startTime, endTime, eventId] = sessionVal.split("|");
+
+      try {
+        const res = await fetch("/api/preferences/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event_title: title,
+            target_date: date,
+            preferred_room: room,
+            preferred_start_time: startTime,
+            preferred_end_time: endTime,
+            target_event_id: eventId,
+            accept_waitlist: waitlist,
+            monitoring_enabled: monitoring
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Error: ${data.detail || 'Could not save target'}`);
+          return;
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById("manualTargetModal")).hide();
+        showToast("Target configured successfully!", "success");
+        await loadTargets();
+        await applyFilters();
+      } catch (e) {
+        alert("Error saving target: " + e.message);
+      }
+    }
+
+    // --- WEBSOCKETS ---
+    function initWebSocket() {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        document.getElementById("ws-indicator").innerHTML = `<span class="live-dot"></span> Live Sync`;
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "TARGET_STATUS_CHANGED") {
+            showToast(`Target Alert: ${data.notification}`, "warning");
+            loadTargets();
+            applyFilters();
+          } else if (data.type === "TARGETS_UPDATED") {
+            loadTargets();
+          } else if (data.type === "TARGET_ARMED") {
+            showToast(data.message || `Target #${data.target_id} armed for autonomous booking!`, "success");
+            loadTargets();
+          } else if (data.type === "TARGET_DISARMED") {
+            showToast(data.message || `Target #${data.target_id} disarmed.`, "info");
+            loadTargets();
+          } else if (data.type === "AUTO_BOOKING_INITIATED") {
+            showToast(`⚡ ${data.message}`, "warning");
+            loadTargets();
+            loadAttempts();
+          } else if (data.type === "AUTO_BOOKING_SUCCESS") {
+            showToast(`🎉 ${data.message}`, "success");
+            loadTargets();
+            loadAttempts();
+          } else if (data.type === "AUTO_BOOKING_FAILED") {
+            showToast(`❌ Autonomous Booking Failed: ${data.message}`, "danger");
+            loadTargets();
+            loadAttempts();
+          } else if (data.type === "AUTO_BOOKING_PREFLIGHT_FAILED") {
+            showToast(`⚠️ Preflight Failed: ${data.summary}`, "danger");
+            loadTargets();
+            loadAttempts();
+          } else if (data.type === "PORTAL_CRASH_RETRY") {
+            showToast(`⚡ High traffic crash/timeout (Attempt #${data.attempt_count}). Retrying continuously (${data.remaining_seconds}s left in 5-min window)...`, "warning");
+            loadAttempts();
+          } else if (data.type === "PORTAL_SURGE_DETECTED") {
+            showToast(`⚡ High traffic surge detected. Continuous Blitz monitoring active (2s polling)...`, "info");
+          } else if (data.type === "AUTO_BOOKING_ATTEMPT") {
+            showToast(data.message, "info");
+            loadAttempts();
+          } else if (data.type === "SESSION_EXPIRED") {
+            showToast("Warning: Saveetha portal session expired!", "danger");
+            checkSession();
+          }
+        } catch (e) {
+          console.error("WS Parse error:", e);
+        }
+      };
+
+      ws.onclose = () => {
+        document.getElementById("ws-indicator").innerHTML = `<span class="text-warning">● Reconnecting...</span>`;
+        setTimeout(initWebSocket, 3000);
+      };
+    }
+
+    function escapeHtml(text) {
+      if (!text) return "";
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function escapeJs(text) {
+      if (!text) return "";
+      return String(text).replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+  </script>
+</body>
+</html>

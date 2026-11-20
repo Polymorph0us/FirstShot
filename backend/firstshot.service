@@ -1,0 +1,14 @@
+[Unit]
+Description=FirstShot Autonomous Booking Engine
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/poly/Projects/FirstShot/backend
+ExecStart=/home/poly/Projects/FirstShot/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONPATH=/home/poly/Projects/FirstShot/backend
+
+[Install]
+WantedBy=default.target

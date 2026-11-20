@@ -1,0 +1,16 @@
+aiosqlite==0.22.1
+alembic==1.20.1
+anyio==4.16.0
+apscheduler==3.11.2
+fastapi==0.165.0
+greenlet==3.5.6
+httpx==0.28.1
+playwright==1.65.2
+pydantic==2.14.3
+pydantic-settings==2.16.3
+pytest==9.2.0
+pytest-asyncio==1.5.0
+ruff==0.17.6
+sqlalchemy==2.1.9
+starlette==1.10.0
+uvicorn==0.54.0
