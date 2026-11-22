@@ -16,7 +16,9 @@ from app.models.event import DiscoveredEvent
 from app.models.monitoring import MonitoringJob, NotificationLog
 from app.models.preference import BookingPreference
 from app.models.schemas import EventSchema
+from app.models.user import User
 from app.providers.base import BaseProvider
+from app.providers.pool import provider_pool
 from app.providers.saveetha import SaveethaProvider
 from app.services.preference_engine import PreferenceEngine
 from app.services.preflight import PreflightEngine
@@ -25,18 +27,44 @@ logger = logging.getLogger("firstshot.scheduler")
 IST = zoneinfo.ZoneInfo("Asia/Kolkata")
 
 class WebSocketManager:
-    """Manages active WebSocket connections for live real-time dashboard updates."""
+    """Manages active WebSocket connections for live real-time dashboard updates with per-user scoping."""
     def __init__(self):
         self.active_connections: Set[Any] = set()
+        self.user_connections: Dict[int, Set[Any]] = {}
+        self.connection_users: Dict[Any, int] = {}
 
-    async def connect(self, websocket: Any):
+    async def connect(self, websocket: Any, user_id: Optional[int] = None):
         await websocket.accept()
         self.active_connections.add(websocket)
+        if user_id is not None:
+            if user_id not in self.user_connections:
+                self.user_connections[user_id] = set()
+            self.user_connections[user_id].add(websocket)
+            self.connection_users[websocket] = user_id
 
     def disconnect(self, websocket: Any):
         self.active_connections.discard(websocket)
+        user_id = self.connection_users.pop(websocket, None)
+        if user_id is not None and user_id in self.user_connections:
+            self.user_connections[user_id].discard(websocket)
+            if not self.user_connections[user_id]:
+                del self.user_connections[user_id]
 
-    async def broadcast(self, message: Dict[str, Any]):
+    async def send_to_user(self, user_id: int, message: Dict[str, Any]):
+        """Send message strictly to the specified user's active connections."""
+        sockets = self.user_connections.get(user_id, set())
+        for connection in list(sockets):
+            try:
+                await connection.send_json(message)
+            except Exception:
+                self.disconnect(connection)
+
+    async def broadcast(self, message: Dict[str, Any], user_id: Optional[int] = None):
+        """Broadcast message to all connections, or only to a specific user if specified."""
+        if user_id is not None:
+            await self.send_to_user(user_id, message)
+            return
+
         for connection in list(self.active_connections):
             try:
                 await connection.send_json(message)
@@ -120,156 +148,174 @@ class MonitoringEngine:
             except Exception as e:
                 logger.debug(f"Could not reschedule monitor job: {e}")
 
-        try:
-            # Pre-connect / warm up session
-            sess_status = await self.provider.check_session()
-            if sess_status.get("server_crashed"):
-                logger.warning(f"Portal experiencing traffic surge / temporary crash: {sess_status.get('message')}. Retaining active monitoring.")
-                await ws_manager.broadcast({
-                    "type": "PORTAL_SURGE_DETECTED",
-                    "message": "Saveetha portal is experiencing high traffic (HTTP 502/timeout). Continuous monitoring active...",
-                    "timestamp": datetime.now(IST).isoformat()
-                })
-            elif not sess_status.get("authenticated"):
-                await ws_manager.broadcast({
-                    "type": "SESSION_EXPIRED",
-                    "message": "Saveetha portal session expired during target monitoring. Please log in."
-                })
-                return
+        targets_by_user: Dict[int, List[BookingPreference]] = {}
+        for t in targets:
+            uid = getattr(t, "user_id", 1) or 1
+            targets_by_user.setdefault(uid, []).append(t)
 
-            # Query events targeted by date if targets have explicit target dates
-            unique_dates = {t.target_date or t.preferred_date for t in targets if (t.target_date or t.preferred_date)}
-            events_by_date = {}
-            raw_events = []
-
-            if unique_dates:
-                for udate in unique_dates:
-                    try:
-                        d_events = await self.provider.get_events(filters={"date_from": udate, "date_to": udate})
-                        events_by_date[udate] = d_events
-                        raw_events.extend(d_events)
-                    except Exception as err:
-                        logger.error(f"Error fetching portal events for target date {udate}: {err}")
-            else:
-                raw_events = await self.provider.get_events()
-
-            now = datetime.now(IST)
-
-            for target in targets:
-                # Find exact matching event from date-specific candidates
-                t_date = target.target_date or target.preferred_date
-                candidates = events_by_date.get(t_date, raw_events)
-                exact_match = None
-                for evt in candidates:
-                    matched, score, reasons = PreferenceEngine.evaluate_match(evt, target)
-                    if matched and score >= 60:
-                        exact_match = evt
-                        break
-
+        now = datetime.now(IST)
+        for uid, user_targets in targets_by_user.items():
+            try:
                 async with AsyncSessionLocal() as session:
-                    db_target = await session.get(BookingPreference, target.id)
-                    if not db_target:
-                        continue
+                    user = await session.get(User, uid)
+                    if not user:
+                        user = User(id=uid, username=f"user_{uid}", role="owner" if uid == 1 else "student")
 
-                    old_status = self.target_last_statuses.get(target.id) or db_target.current_status
+                if self.provider and not isinstance(self.provider, SaveethaProvider):
+                    user_provider = self.provider
+                else:
+                    user_provider = await provider_pool.get_provider(user)
+                sess_status = await user_provider.check_session()
+                if sess_status.get("server_crashed"):
+                    logger.warning(f"User {uid}: Portal experiencing surge / crash. Retaining active monitoring.")
+                    await ws_manager.send_to_user(uid, {
+                        "type": "PORTAL_SURGE_DETECTED",
+                        "message": "Saveetha portal is experiencing high traffic (HTTP 502/timeout). Continuous monitoring active...",
+                        "timestamp": now.isoformat()
+                    })
+                elif not sess_status.get("authenticated"):
+                    await ws_manager.send_to_user(uid, {
+                        "type": "SESSION_EXPIRED",
+                        "message": "Saveetha portal session expired during target monitoring. Please log in."
+                    })
+                    continue
 
-                    if exact_match:
-                        new_status = exact_match.booking_status
-                        db_target.current_status = new_status
-                        db_target.capacity = exact_match.capacity
-                        db_target.waitlist_capacity = exact_match.waitlist_capacity
-                        db_target.target_event_id = exact_match.event_id
-                        db_target.last_checked_at = now
+                unique_dates = {t.target_date or t.preferred_date for t in user_targets if (t.target_date or t.preferred_date)}
+                events_by_date = {}
+                raw_events = []
 
-                        # Status transition detection
-                        if old_status is not None and old_status != new_status:
-                            notif_msg = (
-                                f"Target '{db_target.event_title}' (Room {db_target.preferred_room}, "
-                                f"{exact_match.start_time}) changed: '{old_status}' → '{new_status}'!"
-                            )
-                            logger.info(notif_msg)
+                if unique_dates:
+                    for udate in unique_dates:
+                        try:
+                            d_events = await user_provider.get_events(filters={"date_from": udate, "date_to": udate})
+                            events_by_date[udate] = d_events
+                            raw_events.extend(d_events)
+                        except Exception as err:
+                            logger.error(f"User {uid}: Error fetching portal events for target date {udate}: {err}")
+                else:
+                    raw_events = await user_provider.get_events()
 
-                            notif = NotificationLog(
-                                event_id=exact_match.event_id,
-                                title=exact_match.title,
-                                status_from=old_status,
-                                status_to=new_status,
-                                message=notif_msg,
-                                created_at=datetime.now(timezone.utc)
-                            )
-                            session.add(notif)
+                for target in user_targets:
+                    # Find exact matching event from date-specific candidates
+                    t_date = target.target_date or target.preferred_date
+                    candidates = events_by_date.get(t_date, raw_events)
+                    exact_match = None
+                    for evt in candidates:
+                        matched, score, reasons = PreferenceEngine.evaluate_match(evt, target)
+                        if matched and score >= 60:
+                            exact_match = evt
+                            break
 
-                            # Booking Trigger or Assist Preparation
-                            is_target_open = (new_status == "Open") or (new_status == "Waitlist Open" and db_target.accept_waitlist)
-                            prepared_payload = None
+                    async with AsyncSessionLocal() as session:
+                        db_target = await session.get(BookingPreference, target.id)
+                        if not db_target:
+                            continue
 
-                            if is_target_open:
-                                if db_target.booking_mode == "AUTO_BOOK" and db_target.is_armed and db_target.user_permitted_automation:
-                                    if db_target.id not in self._executing_targets and db_target.execution_status in ("ARMED", "IDLE"):
-                                        logger.info(f"Target {db_target.id} verified OPEN & pre-armed for AUTO_BOOK. Executing autonomous booking!")
-                                        asyncio.create_task(self.execute_autonomous_booking(db_target.id, exact_match))
-                                elif db_target.booking_mode == "ASSIST":
-                                    try:
-                                        prepared_payload = await self.provider.prepare_booking(exact_match.event_id)
-                                    except Exception as err:
-                                        logger.error(f"Error preparing booking for target {target.id}: {err}")
+                        old_status = self.target_last_statuses.get(target.id) or db_target.current_status
 
-                            await ws_manager.broadcast({
-                                "type": "TARGET_STATUS_CHANGED",
-                                "target_id": db_target.id,
-                                "event_title": db_target.event_title,
-                                "room": db_target.preferred_room,
-                                "date": db_target.target_date,
-                                "time": exact_match.start_time,
-                                "old_status": old_status,
-                                "new_status": new_status,
-                                "prepared_booking": prepared_payload,
-                                "notification": notif_msg,
-                                "timestamp": now.isoformat()
-                            })
+                        if exact_match:
+                            new_status = exact_match.booking_status
+                            db_target.current_status = new_status
+                            db_target.capacity = exact_match.capacity
+                            db_target.waitlist_capacity = exact_match.waitlist_capacity
+                            db_target.target_event_id = exact_match.event_id
+                            db_target.last_checked_at = now
 
-                        # Even if status didn't transition this tick, check if open target is pre-armed and unexecuted
-                        is_target_open = (new_status == "Open") or (new_status == "Waitlist Open" and db_target.accept_waitlist)
-                        if is_target_open and db_target.booking_mode == "AUTO_BOOK" and db_target.is_armed and db_target.user_permitted_automation:
-                            if db_target.id not in self._executing_targets and db_target.execution_status in ("ARMED", "IDLE"):
-                                logger.info(f"Target {db_target.id} is verified OPEN and pre-armed. Executing autonomous booking...")
-                                asyncio.create_task(self.execute_autonomous_booking(db_target.id, exact_match))
+                            # Status transition detection
+                            if old_status is not None and old_status != new_status:
+                                notif_msg = (
+                                    f"Target '{db_target.event_title}' (Room {db_target.preferred_room}, "
+                                    f"{exact_match.start_time}) changed: '{old_status}' → '{new_status}'!"
+                                )
+                                logger.info(notif_msg)
 
-                        # If target became Full or Closed, check for alternatives in other rooms/times
-                        if new_status in ("Full", "Booking Closed"):
-                            alternatives = PreferenceEngine.find_alternatives(db_target, raw_events)
-                            if alternatives:
-                                await ws_manager.broadcast({
-                                    "type": "TARGET_UNAVAILABLE_ALTERNATIVES",
+                                notif = NotificationLog(
+                                    event_id=exact_match.event_id,
+                                    title=exact_match.title,
+                                    status_from=old_status,
+                                    status_to=new_status,
+                                    message=notif_msg,
+                                    created_at=datetime.now(timezone.utc)
+                                )
+                                session.add(notif)
+
+                                # Booking Trigger or Assist Preparation
+                                is_target_open = (new_status == "Open") or (new_status == "Waitlist Open" and db_target.accept_waitlist)
+                                prepared_payload = None
+
+                                if is_target_open:
+                                    if db_target.booking_mode == "AUTO_BOOK" and db_target.is_armed and db_target.user_permitted_automation:
+                                        if db_target.id not in self._executing_targets and db_target.execution_status in ("ARMED", "IDLE"):
+                                            logger.info(f"Target {db_target.id} verified OPEN & pre-armed for AUTO_BOOK. Executing autonomous booking!")
+                                            asyncio.create_task(self.execute_autonomous_booking(db_target.id, exact_match, user=user, provider=user_provider))
+                                    elif db_target.booking_mode == "ASSIST":
+                                        try:
+                                            prepared_payload = await user_provider.prepare_booking(exact_match.event_id)
+                                        except Exception as err:
+                                            logger.error(f"Error preparing booking for target {target.id}: {err}")
+
+                                await ws_manager.send_to_user(uid, {
+                                    "type": "TARGET_STATUS_CHANGED",
                                     "target_id": db_target.id,
-                                    "target_title": db_target.event_title,
-                                    "target_room": db_target.preferred_room,
-                                    "target_status": new_status,
-                                    "alternatives": [a.model_dump() for a in alternatives]
+                                    "event_title": db_target.event_title,
+                                    "room": db_target.preferred_room,
+                                    "date": db_target.target_date,
+                                    "time": exact_match.start_time,
+                                    "old_status": old_status,
+                                    "new_status": new_status,
+                                    "prepared_booking": prepared_payload,
+                                    "notification": notif_msg,
+                                    "timestamp": now.isoformat()
                                 })
 
-                        self.target_last_statuses[target.id] = new_status
-                    else:
-                        is_fetch_crash = getattr(self.provider, "last_fetch_status", None) in (500, 502, 503, 504) or getattr(self.provider, "last_fetch_error", None) is not None
-                        if is_fetch_crash:
-                            logger.warning(f"Target #{target.id}: Portal error/timeout during event fetch. Retaining status '{old_status}'.")
-                            db_target.last_checked_at = now
+                            # Even if status didn't transition this tick, check if open target is pre-armed and unexecuted
+                            is_target_open = (new_status == "Open") or (new_status == "Waitlist Open" and db_target.accept_waitlist)
+                            if is_target_open and db_target.booking_mode == "AUTO_BOOK" and db_target.is_armed and db_target.user_permitted_automation:
+                                if db_target.id not in self._executing_targets and db_target.execution_status in ("ARMED", "IDLE"):
+                                    logger.info(f"Target {db_target.id} is verified OPEN and pre-armed. Executing autonomous booking...")
+                                    asyncio.create_task(self.execute_autonomous_booking(db_target.id, exact_match, user=user, provider=user_provider))
+
+                            # If target became Full or Closed, check for alternatives in other rooms/times
+                            if new_status in ("Full", "Booking Closed"):
+                                alternatives = PreferenceEngine.find_alternatives(db_target, raw_events)
+                                if alternatives:
+                                    await ws_manager.send_to_user(uid, {
+                                        "type": "TARGET_UNAVAILABLE_ALTERNATIVES",
+                                        "target_id": db_target.id,
+                                        "target_title": db_target.event_title,
+                                        "target_room": db_target.preferred_room,
+                                        "target_status": new_status,
+                                        "alternatives": [a.model_dump() for a in alternatives]
+                                    })
+
+                            self.target_last_statuses[target.id] = new_status
                         else:
-                            db_target.last_checked_at = now
-                            db_target.current_status = "Not Scheduled / Unknown"
+                            is_fetch_crash = getattr(user_provider, "last_fetch_status", None) in (500, 502, 503, 504) or getattr(user_provider, "last_fetch_error", None) is not None
+                            if is_fetch_crash:
+                                logger.warning(f"Target #{target.id}: Portal error/timeout during event fetch. Retaining status '{old_status}'.")
+                                db_target.last_checked_at = now
+                            else:
+                                db_target.last_checked_at = now
+                                db_target.current_status = "Not Scheduled / Unknown"
 
-                    await session.commit()
+                        await session.commit()
 
-            # Broadcast target update
-            await ws_manager.broadcast({
-                "type": "TARGETS_UPDATED",
-                "timestamp": now.isoformat()
-            })
+                # Broadcast target update strictly for this user
+                await ws_manager.send_to_user(uid, {
+                    "type": "TARGETS_UPDATED",
+                    "timestamp": now.isoformat()
+                })
 
-        except Exception as e:
-            logger.error(f"Error during check_all_targets: {e}")
+            except Exception as e:
+                logger.error(f"Error during check_all_targets for user {uid}: {e}")
 
-    async def execute_autonomous_booking(self, target_id: int, matched_event: EventSchema) -> Dict[str, Any]:
+    async def execute_autonomous_booking(
+        self,
+        target_id: int,
+        matched_event: EventSchema,
+        user: Optional[User] = None,
+        provider: Optional[BaseProvider] = None
+    ) -> Dict[str, Any]:
         """
         Executes a pre-authorized, pre-armed autonomous booking attempt.
         Strictly enforces preflight verification, persistent attempt recording,
@@ -285,6 +331,15 @@ class MonitoringEngine:
                 target = await session.get(BookingPreference, target_id)
                 if not target:
                     return {"success": False, "message": "Target not found."}
+
+                user_id = target.user_id or 1
+                if self.provider and not isinstance(self.provider, SaveethaProvider):
+                    provider = self.provider
+                elif not user or not provider:
+                    user = await session.get(User, user_id)
+                    if not user:
+                        user = User(id=user_id, username=f"user_{user_id}", role="owner" if user_id == 1 else "student")
+                    provider = await provider_pool.get_provider(user)
 
                 if not target.is_armed or target.booking_mode != "AUTO_BOOK" or not target.user_permitted_automation:
                     logger.warning(f"Target {target_id} is not armed for AUTO_BOOK or user permission not confirmed. Aborting.")
@@ -305,7 +360,7 @@ class MonitoringEngine:
                     return {"success": True, "message": "Already confirmed."}
 
                 # 2. Preflight checks before submission
-                preflight = await PreflightEngine.run_checks(target, self.provider)
+                preflight = await PreflightEngine.run_checks(target, provider)
                 target.last_preflight_status = "PASSED" if preflight.passed else "FAILED"
                 target.last_preflight_details = json.dumps([c.model_dump() for c in preflight.checks])
                 target.last_preflight_at = datetime.now(timezone.utc)
@@ -315,6 +370,7 @@ class MonitoringEngine:
                     logger.error(fail_msg)
 
                     failed_attempt = BookingAttempt(
+                        user_id=user_id,
                         preference_id=target.id,
                         target_event_id=matched_event.event_id,
                         session_id=matched_event.session_id or matched_event.event_id,
@@ -330,7 +386,7 @@ class MonitoringEngine:
                     target.is_armed = False  # Disarm on preflight failure to alert user
                     await session.commit()
 
-                    await ws_manager.broadcast({
+                    await ws_manager.send_to_user(user_id, {
                         "type": "AUTO_BOOKING_PREFLIGHT_FAILED",
                         "target_id": target.id,
                         "event_title": target.event_title,
@@ -344,6 +400,7 @@ class MonitoringEngine:
                 action = "join_waitlist" if matched_event.booking_status == "Waitlist Open" else "book"
 
                 attempt = BookingAttempt(
+                    user_id=user_id,
                     preference_id=target.id,
                     target_event_id=matched_event.event_id,
                     session_id=str(session_id_to_submit),
@@ -359,7 +416,7 @@ class MonitoringEngine:
                 await session.refresh(attempt)
                 attempt_id = attempt.id
 
-                await ws_manager.broadcast({
+                await ws_manager.send_to_user(user_id, {
                     "type": "AUTO_BOOKING_INITIATED",
                     "target_id": target.id,
                     "event_title": target.event_title,
@@ -393,8 +450,8 @@ class MonitoringEngine:
                         cur_attempt.retry_count = attempt_num
                         await session.commit()
 
-                # Broadcast live attempt notification
-                await ws_manager.broadcast({
+                # Broadcast live attempt notification strictly to this user
+                await ws_manager.send_to_user(user_id, {
                     "type": "AUTO_BOOKING_ATTEMPT",
                     "target_id": target_id,
                     "event_title": target.event_title,
@@ -407,7 +464,7 @@ class MonitoringEngine:
 
                 t0 = datetime.now(timezone.utc)
                 try:
-                    submit_result = await self.provider.submit_booking(
+                    submit_result = await provider.submit_booking(
                         session_id=str(session_id_to_submit),
                         purpose=target.purpose,
                         action=action,
@@ -447,7 +504,7 @@ class MonitoringEngine:
                             cur_attempt.response_message = f"Attempt #{attempt_num} crash/timeout: {err_msg}"
                             await session.commit()
 
-                    await ws_manager.broadcast({
+                    await ws_manager.send_to_user(user_id, {
                         "type": "PORTAL_CRASH_RETRY",
                         "target_id": target_id,
                         "event_title": target.event_title,
@@ -501,9 +558,9 @@ class MonitoringEngine:
 
                 await session.commit()
 
-                # Broadcast final execution result
+                # Broadcast final execution result strictly to this user
                 broadcast_type = "AUTO_BOOKING_SUCCESS" if is_success else "AUTO_BOOKING_FAILED"
-                await ws_manager.broadcast({
+                await ws_manager.send_to_user(user_id, {
                     "type": broadcast_type,
                     "target_id": target_id,
                     "event_title": target.event_title if target else "",

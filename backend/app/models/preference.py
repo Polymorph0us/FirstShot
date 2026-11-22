@@ -9,6 +9,7 @@ class BookingPreference(Base):
     __tablename__ = "booking_preferences"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, default=1, nullable=False, index=True)
     event_title = Column(String(255), nullable=False)
     target_date = Column(String(50), nullable=True)          # e.g. "2026-11-20" or "Nov 20, 2026"
     preferred_room = Column(String(100), nullable=True)      # e.g. "1731", "1851", "1852"
@@ -92,6 +93,7 @@ class BookingPreference(Base):
     def to_dict(self):
         return {
             "id": self.id,
+            "user_id": self.user_id,
             "event_title": self.event_title,
             "title": self.event_title,
             "target_date": self.target_date,

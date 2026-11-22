@@ -9,6 +9,7 @@ class BookingAttempt(Base):
     __tablename__ = "booking_attempts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, default=1, nullable=False, index=True)
     preference_id = Column(Integer, nullable=True)
     target_event_id = Column(String(100), nullable=True)
     session_id = Column(String(50), nullable=True)
@@ -24,6 +25,7 @@ class BookingAttempt(Base):
     def to_dict(self):
         return {
             "id": self.id,
+            "user_id": self.user_id,
             "preference_id": self.preference_id,
             "target_event_id": self.target_event_id,
             "session_id": self.session_id,

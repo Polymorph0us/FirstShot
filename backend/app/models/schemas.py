@@ -56,6 +56,7 @@ class PreferenceCreate(BaseModel):
 
 class PreferenceResponse(BaseModel):
     id: int
+    user_id: Optional[int] = 1
     event_title: str
     title: str
     target_date: Optional[str] = None
@@ -209,6 +210,7 @@ class PreflightResponse(BaseModel):
 
 class BookingAttemptResponse(BaseModel):
     id: int
+    user_id: Optional[int] = 1
     preference_id: Optional[int] = None
     target_event_id: Optional[str] = None
     session_id: Optional[str] = None
@@ -220,3 +222,22 @@ class BookingAttemptResponse(BaseModel):
     response_message: Optional[str] = None
     attempted_at: Optional[str] = None
     execution_duration_ms: Optional[int] = None
+
+class UserRegisterRequest(BaseModel):
+    username: str
+    password: str
+
+class UserLoginRequest(BaseModel):
+    username: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    role: str
+    created_at: Optional[str] = None
+
+class AuthResponse(BaseModel):
+    success: bool
+    token: str
+    user: UserResponse

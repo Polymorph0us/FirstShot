@@ -1,20 +1,23 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import (
+    auth_router,
     booking_router,
     events_router,
     monitoring_router,
     preferences_router,
     session_router,
 )
+from app.core.auth import get_user_from_token
 from app.core.config import settings
-from app.database.session import init_db
+from app.database.session import AsyncSessionLocal, init_db
 from app.services.scheduler import monitoring_engine, ws_manager
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -49,6 +52,7 @@ app.add_middleware(
 )
 
 # Include Routers
+app.include_router(auth_router)
 app.include_router(events_router)
 app.include_router(preferences_router)
 app.include_router(monitoring_router)
@@ -83,8 +87,18 @@ async def serve_dashboard():
     return HTMLResponse("<h1>FirstShot API Running</h1><p>Frontend build not found.</p>")
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await ws_manager.connect(websocket)
+async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
+    if not token:
+        token = websocket.cookies.get("fs_session")
+
+    user_id = None
+    if token:
+        async with AsyncSessionLocal() as db:
+            user = await get_user_from_token(token, db)
+            if user:
+                user_id = user.id
+
+    await ws_manager.connect(websocket, user_id=user_id)
     try:
         while True:
             # Keep connection open, receive any client heartbeats

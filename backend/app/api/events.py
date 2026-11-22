@@ -1,15 +1,17 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.database.session import get_db
 from app.models.event import DiscoveredEvent
 from app.models.preference import BookingPreference
 from app.models.schemas import EventSchema
+from app.models.user import User
+from app.providers.pool import provider_pool
 from app.services.preference_engine import PreferenceEngine
-from app.services.scheduler import monitoring_engine
 
 router = APIRouter(prefix="/api/events", tags=["Events"])
 
@@ -47,11 +49,12 @@ async def list_events(
     slot_name: Optional[str] = Query(None),
     session_time: Optional[str] = Query(None),
     live: bool = Query(True, description="Fetch directly from Saveetha portal"),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Fetch discovered events with optional filtering.
-    When live=True, connects to Saveetha portal via persistent session.
+    When live=True, connects to Saveetha portal via the user's isolated session.
     """
     filters = {}
     if event_term:
@@ -65,12 +68,19 @@ async def list_events(
     if session_time:
         filters["session_time"] = session_time
 
-    # Fetch active user preferences
-    pref_res = await db.execute(select(BookingPreference).where(BookingPreference.is_active == True))
+    # Fetch active user preferences scoped to current user
+    pref_res = await db.execute(
+        select(BookingPreference).where(
+            and_(
+                BookingPreference.user_id == current_user.id,
+                BookingPreference.is_active == True
+            )
+        )
+    )
     preferences = pref_res.scalars().all()
 
     if live:
-        provider = monitoring_engine.provider
+        provider = await provider_pool.get_provider(current_user)
         events = await provider.get_events(filters)
         # Update cache in background/db
         for evt in events:
@@ -139,21 +149,32 @@ async def list_events(
 @router.get("/available", response_model=List[EventSchema])
 async def list_available_slots(
     slot_name: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Returns only slots that are Open or available to book."""
-    provider = monitoring_engine.provider
+    provider = await provider_pool.get_provider(current_user)
     filters = {"slot_name": slot_name} if slot_name else {}
     events = await provider.get_available_slots(filters)
 
-    pref_res = await db.execute(select(BookingPreference).where(BookingPreference.is_active == True))
+    pref_res = await db.execute(
+        select(BookingPreference).where(
+            and_(
+                BookingPreference.user_id == current_user.id,
+                BookingPreference.is_active == True
+            )
+        )
+    )
     preferences = pref_res.scalars().all()
     return PreferenceEngine.match_events(events, preferences)
 
 @router.get("/{event_id}/details")
-async def get_event_details(event_id: str):
+async def get_event_details(
+    event_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """Fetch view-more details for session."""
-    provider = monitoring_engine.provider
+    provider = await provider_pool.get_provider(current_user)
     details = await provider.get_event_details(event_id)
     if not details:
         raise HTTPException(status_code=404, detail="Session details not found")

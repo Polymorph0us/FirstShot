@@ -135,16 +135,17 @@ class PreflightEngine:
 
         # 7. Target Not Already Booked Check
         already_booked = False
-        async with AsyncSessionLocal() as session:
-            res = await session.execute(
-                select(BookingAttempt).where(
-                    BookingAttempt.preference_id == target.id,
-                    BookingAttempt.status == "CONFIRMED"
+        if target.id is not None:
+            async with AsyncSessionLocal() as session:
+                res = await session.execute(
+                    select(BookingAttempt).where(
+                        BookingAttempt.preference_id == target.id,
+                        BookingAttempt.status == "CONFIRMED"
+                    )
                 )
-            )
-            confirmed_attempts = res.scalars().all()
-            if confirmed_attempts:
-                already_booked = True
+                confirmed_attempts = res.scalars().all()
+                if confirmed_attempts:
+                    already_booked = True
 
         if matched_event and matched_event.booking_status in ("Booked", "Registered"):
             already_booked = True

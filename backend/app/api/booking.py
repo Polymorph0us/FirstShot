@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.database.session import get_db
 from app.models.booking_attempt import BookingAttempt
 from app.models.schemas import (
@@ -14,19 +15,23 @@ from app.models.schemas import (
     PrepareBookingRequest,
     PrepareBookingResponse,
 )
-from app.services.scheduler import monitoring_engine
+from app.models.user import User
+from app.providers.pool import provider_pool
 
 router = APIRouter(prefix="/api/booking", tags=["Booking"])
 
 @router.post("/prepare", response_model=PrepareBookingResponse)
-async def prepare_booking(req: PrepareBookingRequest):
+async def prepare_booking(
+    req: PrepareBookingRequest,
+    current_user: User = Depends(get_current_user)
+):
     """
     ASSIST MODE (Step 1): Inspects the session, verifies availability, and prepares parameters.
     No booking is submitted here.
     """
-    provider = monitoring_engine.provider
+    provider = await provider_pool.get_provider(current_user)
 
-    # 1. Verify authenticated session
+    # 1. Verify authenticated session in user's isolated profile
     sess_status = await provider.check_session()
     if not sess_status.get("authenticated"):
         raise HTTPException(
@@ -54,7 +59,11 @@ async def prepare_booking(req: PrepareBookingRequest):
     )
 
 @router.post("/confirm", response_model=ConfirmBookingResponse)
-async def confirm_booking(req: ConfirmBookingRequest):
+async def confirm_booking(
+    req: ConfirmBookingRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """
     ASSIST MODE (Step 2): Controlled booking confirmation.
     Requires explicit user confirmation before executing submission.
@@ -74,8 +83,8 @@ async def confirm_booking(req: ConfirmBookingRequest):
     if len(clean_purpose) > 255:
         raise HTTPException(status_code=400, detail="Purpose exceeds maximum length of 255 characters.")
 
-    # 3. Check session authentication
-    provider = monitoring_engine.provider
+    # 3. Check session authentication for this user
+    provider = await provider_pool.get_provider(current_user)
     sess_status = await provider.check_session()
     if not sess_status.get("authenticated"):
         raise HTTPException(status_code=401, detail="Portal session expired. Please re-authenticate.")
@@ -86,6 +95,21 @@ async def confirm_booking(req: ConfirmBookingRequest):
         purpose=clean_purpose,
         action=req.booking_action
     )
+
+    # Record persistent booking attempt for this user
+    status_str = "CONFIRMED" if submit_result.get("success") else submit_result.get("status", "FAILED")
+    attempt = BookingAttempt(
+        user_id=current_user.id,
+        session_id=str(req.session_id),
+        mode="ASSIST",
+        purpose=clean_purpose,
+        status=status_str,
+        verified=submit_result.get("verified", False),
+        response_message=submit_result.get("message", ""),
+        attempted_at=datetime.now(timezone.utc)
+    )
+    db.add(attempt)
+    await db.commit()
 
     if not submit_result.get("success") and submit_result.get("status") == "DUPLICATE_ATTEMPT_PREVENTED":
         raise HTTPException(status_code=409, detail=submit_result.get("message"))
@@ -105,12 +129,20 @@ async def confirm_booking(req: ConfirmBookingRequest):
         status=submit_result.get("status", "CONFIRMED"),
         message=submit_result.get("message", "Booking confirmed."),
         verified=submit_result.get("verified", False),
-        timestamp=submit_result.get("timestamp", datetime.utcnow().isoformat())
+        timestamp=submit_result.get("timestamp", datetime.now(timezone.utc).isoformat())
     )
 
 @router.get("/attempts", response_model=List[BookingAttemptResponse])
-async def list_booking_attempts(db: AsyncSession = Depends(get_db)):
-    """List persistent log of booking attempts."""
-    result = await db.execute(select(BookingAttempt).order_by(BookingAttempt.id.desc()).limit(50))
+async def list_booking_attempts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """List persistent log of booking attempts scoped strictly to the authenticated user."""
+    result = await db.execute(
+        select(BookingAttempt)
+        .where(BookingAttempt.user_id == current_user.id)
+        .order_by(BookingAttempt.id.desc())
+        .limit(50)
+    )
     attempts = result.scalars().all()
     return [a.to_dict() for a in attempts]

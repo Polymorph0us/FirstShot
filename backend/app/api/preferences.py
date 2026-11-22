@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.database.session import get_db
 from app.models.preference import BookingPreference
 from app.models.schemas import (
@@ -17,19 +18,32 @@ from app.models.schemas import (
     TargetSlotEdit,
     TargetSlotFromCard,
 )
+from app.models.user import User
+from app.providers.pool import provider_pool
 from app.services.preflight import PreflightEngine
-from app.services.scheduler import monitoring_engine, ws_manager
+from app.services.scheduler import ws_manager
 
 router = APIRouter(prefix="/api/preferences", tags=["Preferences"])
 
 @router.get("/", response_model=List[PreferenceResponse])
-async def list_preferences(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(BookingPreference).order_by(BookingPreference.id.desc()))
+async def list_preferences(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(BookingPreference)
+        .where(BookingPreference.user_id == current_user.id)
+        .order_by(BookingPreference.id.desc())
+    )
     prefs = result.scalars().all()
     return [p.to_dict() for p in prefs]
 
 @router.post("/", response_model=PreferenceResponse)
-async def create_preference(data: PreferenceCreate, db: AsyncSession = Depends(get_db)):
+async def create_preference(
+    data: PreferenceCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     # Standardize fields between Milestone 1 & Milestone 2
     title = data.event_title or data.title
     if not title:
@@ -42,9 +56,10 @@ async def create_preference(data: PreferenceCreate, db: AsyncSession = Depends(g
     accept_waitlist = data.accept_waitlist if data.allow_waitlist is None else data.allow_waitlist
     monitoring_enabled = data.monitoring_enabled if data.is_active is None else data.is_active
 
-    # Duplicate target prevention
+    # Duplicate target prevention within authenticated user's targets
     query = select(BookingPreference).where(
         and_(
+            BookingPreference.user_id == current_user.id,
             BookingPreference.event_title == title,
             BookingPreference.target_date == target_date,
             BookingPreference.preferred_room == preferred_room,
@@ -56,6 +71,7 @@ async def create_preference(data: PreferenceCreate, db: AsyncSession = Depends(g
         raise HTTPException(status_code=409, detail="A target slot with this exact title, date, room, and start time already exists.")
 
     pref = BookingPreference(
+        user_id=current_user.id,
         event_title=title,
         target_date=target_date,
         preferred_room=preferred_room,
@@ -74,11 +90,16 @@ async def create_preference(data: PreferenceCreate, db: AsyncSession = Depends(g
     return pref.to_dict()
 
 @router.post("/from-card", response_model=PreferenceResponse)
-async def select_card_as_target(data: TargetSlotFromCard, db: AsyncSession = Depends(get_db)):
+async def select_card_as_target(
+    data: TargetSlotFromCard,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Method A: Direct card selection from dashboard."""
-    # Prevent duplicate target
+    # Prevent duplicate target within authenticated user's targets
     query = select(BookingPreference).where(
         and_(
+            BookingPreference.user_id == current_user.id,
             BookingPreference.event_title == data.title,
             BookingPreference.target_date == data.date,
             BookingPreference.preferred_room == data.venue,
@@ -90,6 +111,7 @@ async def select_card_as_target(data: TargetSlotFromCard, db: AsyncSession = Dep
         raise HTTPException(status_code=409, detail=f"Target '{data.title}' ({data.venue}, {data.start_time}) is already saved in My Target Slots.")
 
     pref = BookingPreference(
+        user_id=current_user.id,
         event_title=data.title,
         target_date=data.date,
         preferred_room=data.venue,
@@ -105,10 +127,15 @@ async def select_card_as_target(data: TargetSlotFromCard, db: AsyncSession = Dep
     return pref.to_dict()
 
 @router.put("/{pref_id}", response_model=PreferenceResponse)
-async def update_target(pref_id: int, data: TargetSlotEdit, db: AsyncSession = Depends(get_db)):
+async def update_target(
+    pref_id: int,
+    data: TargetSlotEdit,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Edit an existing target slot configuration."""
     pref = await db.get(BookingPreference, pref_id)
-    if not pref:
+    if not pref or pref.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Target slot not found.")
 
     if data.event_title is not None:
@@ -131,18 +158,26 @@ async def update_target(pref_id: int, data: TargetSlotEdit, db: AsyncSession = D
     return pref.to_dict()
 
 @router.delete("/{pref_id}")
-async def delete_preference(pref_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_preference(
+    pref_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     pref = await db.get(BookingPreference, pref_id)
-    if not pref:
+    if not pref or pref.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Preference not found")
     await db.delete(pref)
     await db.commit()
     return {"success": True, "message": f"Target slot {pref_id} removed."}
 
 @router.put("/{pref_id}/toggle")
-async def toggle_preference(pref_id: int, db: AsyncSession = Depends(get_db)):
+async def toggle_preference(
+    pref_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     pref = await db.get(BookingPreference, pref_id)
-    if not pref:
+    if not pref or pref.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Preference not found")
     pref.monitoring_enabled = not pref.monitoring_enabled
     await db.commit()
@@ -150,9 +185,12 @@ async def toggle_preference(pref_id: int, db: AsyncSession = Depends(get_db)):
 
 # Method B Metadata helper endpoints
 @router.get("/meta/rooms")
-async def get_discovered_rooms(date: Optional[str] = Query(None)):
-    """Return rooms discovered from the actual portal."""
-    provider = monitoring_engine.provider
+async def get_discovered_rooms(
+    date: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user)
+):
+    """Return rooms discovered from the user's isolated portal session."""
+    provider = await provider_pool.get_provider(current_user)
     rooms = await provider.get_available_rooms(date)
     return {"rooms": rooms}
 
@@ -160,10 +198,11 @@ async def get_discovered_rooms(date: Optional[str] = Query(None)):
 async def get_discovered_sessions(
     date: str = Query(..., description="Target date (e.g. 2026-11-20 or Nov 20, 2026)"),
     room: str = Query(..., description="Target room (e.g. 1731, 1851, 1852)"),
-    title: Optional[str] = Query(None, description="Assessment title")
+    title: Optional[str] = Query(None, description="Assessment title"),
+    current_user: User = Depends(get_current_user)
 ):
     """Return actual sessions available on the portal for the chosen date and room."""
-    provider = monitoring_engine.provider
+    provider = await provider_pool.get_provider(current_user)
     sessions = await provider.get_available_sessions_for_room(date, room, title)
     if not sessions:
         return {
@@ -179,14 +218,19 @@ async def get_discovered_sessions(
 
 # Milestone 3: Execution Modes, Pre-Arming, and Preflight Endpoints
 @router.put("/{pref_id}/mode", response_model=PreferenceResponse)
-async def set_target_mode(pref_id: int, data: SetModeRequest, db: AsyncSession = Depends(get_db)):
+async def set_target_mode(
+    pref_id: int,
+    data: SetModeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Set booking mode: OBSERVE, ASSIST, or AUTO_BOOK."""
     mode = data.booking_mode.upper()
     if mode not in ("OBSERVE", "ASSIST", "AUTO_BOOK"):
         raise HTTPException(status_code=400, detail="Invalid booking mode. Must be OBSERVE, ASSIST, or AUTO_BOOK.")
 
     pref = await db.get(BookingPreference, pref_id)
-    if not pref:
+    if not pref or pref.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Target slot not found.")
 
     pref.booking_mode = mode
@@ -200,7 +244,12 @@ async def set_target_mode(pref_id: int, data: SetModeRequest, db: AsyncSession =
     return pref.to_dict()
 
 @router.put("/{pref_id}/arm", response_model=Dict[str, Any])
-async def arm_target(pref_id: int, data: ArmTargetRequest, db: AsyncSession = Depends(get_db)):
+async def arm_target(
+    pref_id: int,
+    data: ArmTargetRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Pre-arms target for autonomous booking upon window opening.
     Requires user confirmation that automation is authorized.
@@ -219,11 +268,11 @@ async def arm_target(pref_id: int, data: ArmTargetRequest, db: AsyncSession = De
         raise HTTPException(status_code=400, detail="Purpose exceeds 255 characters limit.")
 
     pref = await db.get(BookingPreference, pref_id)
-    if not pref:
+    if not pref or pref.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Target slot not found.")
 
-    # Run preflight check
-    provider = monitoring_engine.provider
+    # Run preflight check using user's isolated provider
+    provider = await provider_pool.get_provider(current_user)
     preflight = await PreflightEngine.run_checks(
         target=pref,
         provider=provider,
@@ -248,8 +297,8 @@ async def arm_target(pref_id: int, data: ArmTargetRequest, db: AsyncSession = De
     await db.commit()
     await db.refresh(pref)
 
-    # Broadcast arming event
-    await ws_manager.broadcast({
+    # Broadcast arming event strictly to this user
+    await ws_manager.send_to_user(current_user.id, {
         "type": "TARGET_ARMED",
         "target_id": pref.id,
         "event_title": pref.event_title,
@@ -267,10 +316,14 @@ async def arm_target(pref_id: int, data: ArmTargetRequest, db: AsyncSession = De
     }
 
 @router.put("/{pref_id}/disarm", response_model=PreferenceResponse)
-async def disarm_target(pref_id: int, db: AsyncSession = Depends(get_db)):
+async def disarm_target(
+    pref_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Disarms target, disabling autonomous booking execution."""
     pref = await db.get(BookingPreference, pref_id)
-    if not pref:
+    if not pref or pref.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Target slot not found.")
 
     pref.is_armed = False
@@ -278,7 +331,7 @@ async def disarm_target(pref_id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(pref)
 
-    await ws_manager.broadcast({
+    await ws_manager.send_to_user(current_user.id, {
         "type": "TARGET_DISARMED",
         "target_id": pref.id,
         "event_title": pref.event_title,
@@ -288,13 +341,17 @@ async def disarm_target(pref_id: int, db: AsyncSession = Depends(get_db)):
     return pref.to_dict()
 
 @router.post("/{pref_id}/preflight", response_model=PreflightResponse)
-async def run_target_preflight(pref_id: int, db: AsyncSession = Depends(get_db)):
+async def run_target_preflight(
+    pref_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Runs live preflight checks on demand for a target slot."""
     pref = await db.get(BookingPreference, pref_id)
-    if not pref:
+    if not pref or pref.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Target slot not found.")
 
-    provider = monitoring_engine.provider
+    provider = await provider_pool.get_provider(current_user)
     preflight = await PreflightEngine.run_checks(pref, provider)
 
     pref.last_preflight_status = "PASSED" if preflight.passed else "FAILED"

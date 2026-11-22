@@ -20,7 +20,9 @@ export default [
         console: 'readonly',
         setTimeout: 'readonly',
         confirm: 'readonly',
-        URLSearchParams: 'readonly'
+        URLSearchParams: 'readonly',
+        localStorage: 'readonly',
+        Image: 'readonly'
       }
     },
     rules: {

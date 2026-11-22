@@ -12,7 +12,10 @@ import {
   ExternalLink,
   Calendar,
   MapPin,
-  Plus
+  Plus,
+  User as UserIcon,
+  LogOut,
+  Monitor
 } from 'lucide-react';
 
 export default function App() {
@@ -24,6 +27,21 @@ export default function App() {
   const [terms, setTerms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+  const [authUsername, setAuthUsername] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+
+  // Remote Interactive Screencast Modal State
+  const [showRemoteAuthModal, setShowRemoteAuthModal] = useState(false);
+  const [remoteStatus, setRemoteStatus] = useState('Connecting to isolated remote browser...');
+  const canvasRef = useRef(null);
+  const remoteWsRef = useRef(null);
 
   // Filter for portal events
   const [filterDate, setFilterDate] = useState(() => {
@@ -63,21 +81,102 @@ export default function App() {
     }, 5000);
   };
 
+  const authFetch = async (url, options = {}) => {
+    const token = localStorage.getItem('fs_token');
+    const headers = { ...(options.headers || {}) };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const res = await fetch(url, { ...options, credentials: 'include', headers });
+    if (res.status === 401) {
+      setCurrentUser(null);
+      setShowAuthModal(true);
+    }
+    return res;
+  };
+
   useEffect(() => {
-    fetchSession();
-    fetchTargets();
-    fetchAttempts();
-    fetchTerms();
-    initWebSocket();
+    checkCurrentUser();
 
     return () => {
       if (wsRef.current) wsRef.current.close();
     };
   }, []);
 
+  const checkCurrentUser = async () => {
+    try {
+      const res = await authFetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentUser(data);
+        setShowAuthModal(false);
+        fetchSession();
+        fetchTargets();
+        fetchAttempts();
+        fetchTerms();
+        initWebSocket();
+      } else {
+        setCurrentUser(null);
+        setShowAuthModal(true);
+      }
+    } catch {
+      setCurrentUser(null);
+      setShowAuthModal(true);
+    }
+  };
+
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username: authUsername.trim(), password: authPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Authentication failed');
+      localStorage.setItem('fs_token', data.token);
+      setCurrentUser(data.user);
+      setShowAuthModal(false);
+      setAuthPassword('');
+      showToast(authMode === 'login' ? `Welcome back, ${data.user.username}!` : `Account created for ${data.user.username}!`, 'success');
+      fetchSession();
+      fetchTargets();
+      fetchAttempts();
+      fetchTerms();
+      initWebSocket();
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authFetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignore
+    }
+    localStorage.removeItem('fs_token');
+    setCurrentUser(null);
+    setTargets([]);
+    setAttempts([]);
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setShowAuthModal(true);
+    showToast('Logged out successfully.', 'info');
+  };
+
   const fetchSession = async () => {
     try {
-      const res = await fetch('/api/session/status');
+      const res = await authFetch('/api/session/status');
       const data = await res.json();
       setSessionStatus(data);
     } catch {
@@ -87,9 +186,9 @@ export default function App() {
 
   const fetchTargets = async () => {
     try {
-      const res = await fetch('/api/preferences/');
+      const res = await authFetch('/api/preferences/');
       const data = await res.json();
-      setTargets(data);
+      if (Array.isArray(data)) setTargets(data);
     } catch (e) {
       console.error('Failed to load targets', e);
     }
@@ -97,9 +196,9 @@ export default function App() {
 
   const fetchAttempts = async () => {
     try {
-      const res = await fetch('/api/booking/attempts');
+      const res = await authFetch('/api/booking/attempts');
       const data = await res.json();
-      setAttempts(data);
+      if (Array.isArray(data)) setAttempts(data);
     } catch (e) {
       console.error('Failed to load attempts', e);
     }
@@ -107,9 +206,9 @@ export default function App() {
 
   const fetchTerms = async () => {
     try {
-      const res = await fetch('/api/events/terms');
+      const res = await authFetch('/api/events/terms');
       const data = await res.json();
-      setTerms(data);
+      if (Array.isArray(data)) setTerms(data);
     } catch (e) {
       console.error('Failed to load terms', e);
     }
@@ -124,9 +223,9 @@ export default function App() {
         query.append('date_to', filterDate);
       }
       if (filterTerm) query.append('event_term', filterTerm);
-      const res = await fetch(`/api/events/?${query.toString()}`);
+      const res = await authFetch(`/api/events/?${query.toString()}`);
       const data = await res.json();
-      setEvents(data);
+      if (Array.isArray(data)) setEvents(data);
     } catch {
       showToast('Error querying portal events', 'error');
     } finally {
@@ -135,8 +234,10 @@ export default function App() {
   };
 
   const initWebSocket = () => {
+    const token = localStorage.getItem('fs_token');
+    if (!token) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const wsUrl = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -169,8 +270,101 @@ export default function App() {
     };
 
     ws.onclose = () => {
-      setTimeout(initWebSocket, 4000);
+      if (localStorage.getItem('fs_token')) {
+        setTimeout(initWebSocket, 4000);
+      }
     };
+  };
+
+  // Remote Interactive Screencast WebSocket Connection
+  useEffect(() => {
+    if (!showRemoteAuthModal) {
+      if (remoteWsRef.current) {
+        remoteWsRef.current.close();
+        remoteWsRef.current = null;
+      }
+      return;
+    }
+
+    const token = localStorage.getItem('fs_token');
+    if (!token) return;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/session/remote-auth?token=${encodeURIComponent(token)}`;
+    const ws = new WebSocket(wsUrl);
+    remoteWsRef.current = ws;
+    setRemoteStatus('Connecting to isolated remote browser...');
+
+    ws.onopen = () => {
+      setRemoteStatus('Browser active. Click and type below to log into your Saveetha account:');
+    };
+
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'frame' && canvasRef.current) {
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          };
+          img.src = 'data:image/jpeg;base64,' + msg.data;
+        } else if (msg.type === 'authenticated') {
+          showToast(msg.message, 'success');
+          fetchSession();
+          setTimeout(() => setShowRemoteAuthModal(false), 1500);
+        } else if (msg.type === 'error') {
+          setRemoteStatus(`Error: ${msg.message}`);
+          showToast(msg.message, 'error');
+        }
+      } catch (err) {
+        console.error('Remote auth message error', err);
+      }
+    };
+
+    ws.onclose = () => {
+      setRemoteStatus('Remote browser session ended.');
+    };
+
+    return () => {
+      if (remoteWsRef.current) {
+        remoteWsRef.current.close();
+        remoteWsRef.current = null;
+      }
+    };
+  }, [showRemoteAuthModal]);
+
+  const sendRemoteMouseEvent = (action, e) => {
+    if (!remoteWsRef.current || remoteWsRef.current.readyState !== WebSocket.OPEN) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = Math.round((e.clientX - rect.left) * scaleX);
+    const y = Math.round((e.clientY - rect.top) * scaleY);
+
+    remoteWsRef.current.send(JSON.stringify({
+      type: 'mouse',
+      action,
+      x,
+      y,
+      button: e.button === 2 ? 'right' : 'left',
+      clickCount: 1
+    }));
+  };
+
+  const sendRemoteKeyEvent = (action, e) => {
+    if (!remoteWsRef.current || remoteWsRef.current.readyState !== WebSocket.OPEN) return;
+    if (e.key === 'F12' || e.altKey) return;
+    e.preventDefault();
+    remoteWsRef.current.send(JSON.stringify({
+      type: 'key',
+      action,
+      key: e.key,
+      code: e.code,
+      text: e.key.length === 1 ? e.key : undefined
+    }));
   };
 
   const handleArmTarget = async () => {
@@ -181,7 +375,7 @@ export default function App() {
     }
     setArmingLoading(true);
     try {
-      const res = await fetch(`/api/preferences/${armModalTarget.id}/arm`, {
+      const res = await authFetch(`/api/preferences/${armModalTarget.id}/arm`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -205,7 +399,7 @@ export default function App() {
 
   const handleDisarmTarget = async (id) => {
     try {
-      const res = await fetch(`/api/preferences/${id}/disarm`, { method: 'PUT' });
+      const res = await authFetch(`/api/preferences/${id}/disarm`, { method: 'PUT' });
       if (!res.ok) throw new Error('Disarm failed');
       showToast('Target disarmed', 'info');
       fetchTargets();
@@ -217,7 +411,7 @@ export default function App() {
   const handleRunPreflight = async (id) => {
     setPreflightLoadingId(id);
     try {
-      const res = await fetch(`/api/preferences/${id}/preflight`, { method: 'POST' });
+      const res = await authFetch(`/api/preferences/${id}/preflight`, { method: 'POST' });
       const data = await res.json();
       setPreflightResult(data);
       fetchTargets();
@@ -231,7 +425,7 @@ export default function App() {
   const handleDeleteTarget = async (id) => {
     if (!confirm('Remove this target slot?')) return;
     try {
-      const res = await fetch(`/api/preferences/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/preferences/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       showToast('Target removed', 'info');
       fetchTargets();
@@ -243,7 +437,7 @@ export default function App() {
   const handleAddManualTarget = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/preferences/', {
+      const res = await authFetch('/api/preferences/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -268,7 +462,7 @@ export default function App() {
 
   const handleAddFromCard = async (evt) => {
     try {
-      const res = await fetch('/api/preferences/from-card', {
+      const res = await authFetch('/api/preferences/from-card', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -293,8 +487,8 @@ export default function App() {
 
   const handleReauthenticate = async () => {
     try {
-      showToast('Launching browser for authentication...', 'info');
-      const res = await fetch('/api/session/reauthenticate', { method: 'POST' });
+      showToast('Launching browser on workstation display...', 'info');
+      const res = await authFetch('/api/session/reauthenticate', { method: 'POST' });
       const data = await res.json();
       showToast(data.message, data.success ? 'success' : 'warning');
       fetchSession();
@@ -348,7 +542,13 @@ export default function App() {
         </div>
 
         <div style={styles.navRight}>
-          <div style={styles.sessionStatus}>
+          <div
+            onClick={() => {
+              if (!sessionStatus.authenticated) setShowRemoteAuthModal(true);
+            }}
+            style={{ ...styles.sessionStatus, cursor: sessionStatus.authenticated ? 'default' : 'pointer' }}
+            title={sessionStatus.authenticated ? 'Saveetha Portal Connected' : 'Click to launch interactive remote portal login'}
+          >
             <span
               style={{
                 ...styles.statusDot,
@@ -356,9 +556,39 @@ export default function App() {
               }}
             />
             <span style={styles.statusLabel}>
-              {sessionStatus.authenticated ? 'Saveetha Connected' : 'Disconnected'}
+              {sessionStatus.authenticated ? 'Saveetha Connected' : 'Portal Offline (Click to Connect)'}
             </span>
           </div>
+
+          {currentUser ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#e5e7eb', background: '#1c1c1f', padding: '4px 10px', borderRadius: 6, border: '1px solid #27272a' }}>
+                <UserIcon size={13} style={{ color: '#a1a1aa' }} />
+                <span>{currentUser.username}</span>
+                {currentUser.role === 'owner' ? (
+                  <span style={{ color: '#38bdf8', fontSize: 11, background: '#0284c722', padding: '1px 5px', borderRadius: 4, border: '1px solid #0284c744' }}>Owner</span>
+                ) : (
+                  <span style={{ color: '#a1a1aa', fontSize: 11, background: '#27272a', padding: '1px 5px', borderRadius: 4 }}>Student</span>
+                )}
+              </div>
+              <button
+                onClick={handleLogout}
+                style={{ background: 'transparent', border: '1px solid #27272a', color: '#a1a1aa', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                title="Sign out of FirstShot"
+              >
+                <LogOut size={12} />
+                Logout
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAuthModal(true)}
+              style={styles.primaryActionBtn}
+            >
+              <UserIcon size={13} style={{ marginRight: 6 }} />
+              Sign In
+            </button>
+          )}
         </div>
       </header>
 
@@ -817,11 +1047,29 @@ export default function App() {
                     {sessionStatus.authenticated ? 'Authenticated Session' : 'Session Expired'}
                   </span>
                 </div>
-                <div style={{ marginTop: 14 }}>
-                  <button onClick={handleReauthenticate} style={styles.primaryActionBtn}>
-                    <ExternalLink size={14} style={{ marginRight: 6 }} />
-                    Re-authenticate in Browser
+                <div style={styles.settingsRow}>
+                  <span style={styles.settingsLabel}>FirstShot Account</span>
+                  <span style={styles.settingsValue}>
+                    {currentUser?.username || 'Not Signed In'} ({currentUser?.role === 'owner' ? 'Workstation Owner' : 'Student'})
+                  </span>
+                </div>
+                <div style={styles.settingsRow}>
+                  <span style={styles.settingsLabel}>Isolated Profile Path</span>
+                  <span style={{ ...styles.settingsValue, fontSize: 11, color: '#a1a1aa' }}>
+                    {sessionStatus.profile_dir || (currentUser?.role === 'owner' ? '.local/saveetha-profile' : `.local/profiles/user_${currentUser?.id}`)}
+                  </span>
+                </div>
+                <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button onClick={() => setShowRemoteAuthModal(true)} style={styles.primaryActionBtn}>
+                    <Monitor size={14} style={{ marginRight: 6 }} />
+                    Interactive Remote Portal Login
                   </button>
+                  {currentUser?.role === 'owner' && (
+                    <button onClick={handleReauthenticate} style={styles.secondaryActionBtn}>
+                      <ExternalLink size={14} style={{ marginRight: 6 }} />
+                      Launch Local Host Browser
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1054,6 +1302,196 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* FIRSTSHOT AUTHENTICATION MODAL */}
+      {showAuthModal && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalCard, maxWidth: 420 }}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={styles.logoBadge}>FS</div>
+                <h3 style={styles.modalTitle}>
+                  {authMode === 'login' ? 'Sign in to FirstShot' : 'Create Student Account'}
+                </h3>
+              </div>
+              {currentUser && (
+                <button onClick={() => setShowAuthModal(false)} style={styles.modalCloseBtn}>
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleAuthSubmit}>
+              <div style={styles.modalBody}>
+                {authError && (
+                  <div style={{ padding: '8px 12px', background: '#7f1d1d33', border: '1px solid #7f1d1d88', borderRadius: 6, color: '#f87171', fontSize: 13, marginBottom: 12 }}>
+                    {authError}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', borderBottom: '1px solid #27272a', marginBottom: 16 }}>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 0',
+                      background: 'none',
+                      border: 'none',
+                      borderBottom: authMode === 'login' ? '2px solid #6366f1' : 'none',
+                      color: authMode === 'login' ? '#fff' : '#a1a1aa',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: 13
+                    }}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('register'); setAuthError(''); }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 0',
+                      background: 'none',
+                      border: 'none',
+                      borderBottom: authMode === 'register' ? '2px solid #6366f1' : 'none',
+                      color: authMode === 'register' ? '#fff' : '#a1a1aa',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: 13
+                    }}
+                  >
+                    Register
+                  </button>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.inputLabel}>Username</label>
+                  <input
+                    type="text"
+                    required
+                    value={authUsername}
+                    onChange={(e) => setAuthUsername(e.target.value)}
+                    placeholder="e.g. 192201001 or alice"
+                    style={styles.textInput}
+                    autoFocus
+                  />
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.inputLabel}>Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="Enter account password"
+                    style={styles.textInput}
+                  />
+                </div>
+
+                <p style={{ fontSize: 12, color: '#71717a', marginTop: 4, lineHeight: 1.4 }}>
+                  {authMode === 'login'
+                    ? 'Log in to access your isolated Saveetha portal session, personal targets, and booking history.'
+                    : 'Each registered student receives an isolated browser worker, independent cookies, and secure personal targets.'}
+                </p>
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  style={{ ...styles.primaryActionBtn, width: '100%', justifyContent: 'center' }}
+                >
+                  {authLoading
+                    ? 'Authenticating...'
+                    : authMode === 'login'
+                    ? 'Sign In'
+                    : 'Create Account & Sign In'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* REMOTE INTERACTIVE BROWSER LOGIN MODAL */}
+      {showRemoteAuthModal && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalCardWide, maxWidth: 1060, width: '96vw' }}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Monitor size={18} style={{ color: '#6366f1' }} />
+                <div>
+                  <h3 style={styles.modalTitle}>Saveetha Portal Remote Login</h3>
+                  <div style={{ fontSize: 12, color: '#a1a1aa', marginTop: 2 }}>
+                    {remoteStatus}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRemoteAuthModal(false)}
+                style={styles.modalCloseBtn}
+                title="Close remote session"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: 12, backgroundColor: '#09090b', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{
+                position: 'relative',
+                width: '100%',
+                maxWidth: 1024,
+                aspectRatio: '1024 / 768',
+                backgroundColor: '#18181b',
+                borderRadius: 6,
+                overflow: 'hidden',
+                border: '1px solid #27272a',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+              }}>
+                <canvas
+                  ref={canvasRef}
+                  width={1024}
+                  height={768}
+                  tabIndex={0}
+                  onMouseDown={(e) => sendRemoteMouseEvent('mousePressed', e)}
+                  onMouseUp={(e) => sendRemoteMouseEvent('mouseReleased', e)}
+                  onMouseMove={(e) => sendRemoteMouseEvent('mouseMoved', e)}
+                  onKeyDown={(e) => sendRemoteKeyEvent('keyDown', e)}
+                  onKeyUp={(e) => sendRemoteKeyEvent('keyUp', e)}
+                  onContextMenu={(e) => e.preventDefault()}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'block',
+                    cursor: 'pointer',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: 1024, fontSize: 12, color: '#71717a' }}>
+                <span>🔒 Secure headless browser profile isolated to user #{currentUser?.id} ({currentUser?.username}).</span>
+                <span>Click inside the window and enter your credentials. Session auto-saves on login.</span>
+              </div>
+            </div>
+
+            <div style={styles.modalFooter}>
+              <button
+                onClick={() => {
+                  fetchSession();
+                  setShowRemoteAuthModal(false);
+                }}
+                style={styles.secondaryActionBtn}
+              >
+                Done / Close Window
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     SAVEETHA_BASE_URL: str = "https://learner.saveetha.in"
     SAVEETHA_EVENT_URL: str = "https://learner.saveetha.in/academicevents/event-booking/"
     SAVEETHA_PROFILE_DIR: str = str(PROJECT_ROOT / ".local" / "saveetha-profile")
+    PROFILES_BASE_DIR: str = str(PROJECT_ROOT / ".local" / "profiles")
 
     # Monitoring defaults
     DEFAULT_MONITOR_INTERVAL_SECONDS: int = 60
